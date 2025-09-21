@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { standard as rateStandard } from "@/lib/rate";
+import { captureError } from "@/lib/monitoring";
 
 export async function GET() {
   try {
+    await rateStandard("employee:profile:get");
     const { userId } = await requireAuth();
 
     const { data: employee, error } = await supabaseServer
@@ -29,6 +32,7 @@ export async function GET() {
 
     return NextResponse.json({ ...employee, found: true });
   } catch (e: any) {
+    captureError(e, { route: 'employee/profile:get' });
     if (e instanceof Response) return e;
     return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
   }

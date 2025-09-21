@@ -23,10 +23,17 @@ A modern HR management system built with Next.js, featuring attendance tracking,
    NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
    SUPABASE_SERVICE_ROLE_KEY=service_role_key
+   NEXT_PUBLIC_ENABLE_CLIENT_SUPABASE=false   # true only if allowing client realtime
    OFFICE_IPS=your_office_ip_addresses  # Comma-separated IPs or CIDR ranges
    REQUIRE_OFFICE_FOR_ACCESS=false       # If true, only office IPs can access the app
    HR_IPS=hr_ip1,hr_ip2                  # IPs treated as HR/Admin
    EMPLOYEE_IPS=optional_allowed_ips     # Optional allowlist (restricts access)
+   # Monitoring
+   SENTRY_DSN=                           # optional; enable error reporting
+   SENTRY_TRACES_SAMPLE_RATE=0.05
+   # GPS token (optional)
+   REQUIRE_GEO_TOKEN=false               # require short‑lived token for GPS punches
+   GEO_TOKEN_SECRET=                     # random 32+ char secret
    ```
 
 3. **Run development server**
@@ -106,6 +113,24 @@ create table regularizations (
 - **Authentication**: IP-based (from request headers)
 - **Styling**: Tailwind CSS
 - **UI Components**: Custom components
+
+## Production Hardening
+
+- RLS and data access
+  - For demos, some tables are readable by anon for charts/realtime (see `suppabase.sql`).
+  - For production, apply `supabase.prod.sql` which disables anon reads and allows only the service role. Client reads go via server APIs.
+  - If you adopt Supabase Auth later, switch user_id to `auth.uid()` and use the commented strict per-user RLS policies in `supabase.prod.sql`.
+
+- GPS enforcement at server boundary
+  - Because servers can’t trust client GPS, rely on IP gating for strict control: set `REQUIRE_OFFICE_FOR_ACCESS=true` with proper `OFFICE_IPS`.
+  - Optional: set `REQUIRE_GEO_TOKEN=true` with `GEO_TOKEN_SECRET` to require a short‑lived, server-signed location token from `/api/network/geo/check` for GPS punches.
+
+- Rate limiting and validation
+  - All API routes use Zod validation and lightweight in‑memory rate limiting. Tune limits in `src/lib/rate.ts` as needed.
+
+- Monitoring/tests
+  - Set `SENTRY_DSN` to enable error capture. Errors in API routes are captured via `src/lib/monitoring.ts`.
+  - Minimal integration tests live under `src/tests`. Run `npm run test`.
 
 ## Deployment
 

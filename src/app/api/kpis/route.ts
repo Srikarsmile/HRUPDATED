@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { supabaseServer as supabase } from "@/lib/supabaseServer";
 import { requireAuth } from "@/lib/auth";
+import { standard as rateStandard } from "@/lib/rate";
+import { captureError } from "@/lib/monitoring";
 
 export async function GET() {
   try {
+    await rateStandard("kpis:get");
     const { userId } = await requireAuth();
     const now = new Date();
     const monthStartDate = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -61,6 +64,7 @@ export async function GET() {
 
     return NextResponse.json({ attendancePercent, pending, halfPct, todayDisconnects, approvedLeaveDays });
   } catch (e: any) {
+    captureError(e, { route: 'kpis:get' });
     if (e instanceof Response) return e;
     return NextResponse.json({ attendancePercent: 0, pending: 0, halfPct: 0, todayDisconnects: 0, approvedLeaveDays: 0 });
   }

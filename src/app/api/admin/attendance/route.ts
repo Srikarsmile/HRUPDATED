@@ -1,18 +1,28 @@
 import { NextResponse } from "next/server";
 import { supabaseServer as supabase } from "@/lib/supabaseServer";
 import { requireAuth, requireAdmin } from "@/lib/auth";
+import { parseQuery, parseJson, z } from "@/lib/validate";
+import { standard as rateStandard, strict as rateStrict } from "@/lib/rate";
+import { captureError } from "@/lib/monitoring";
 
 // GET: list attendance days (optionally filtered), with disconnect counts
 export async function GET(req: Request) {
   try {
+    await rateStandard("admin:attendance:get");
     const { role } = await requireAuth();
     requireAdmin(role);
 
     const url = new URL(req.url);
-    const user = url.searchParams.get("user") || undefined;
-    const from = url.searchParams.get("from") || undefined; // YYYY-MM-DD
-    const to = url.searchParams.get("to") || undefined; // YYYY-MM-DD
-    const limit = Math.min(parseInt(url.searchParams.get("limit") || "200", 10), 1000);
+    const qp = parseQuery(url.searchParams, z.object({
+      user: z.string().optional(),
+      from: z.string().optional(),
+      to: z.string().optional(),
+      limit: z.string().optional(),
+    }));
+    const user = qp.user || undefined;
+    const from = qp.from || undefined; // YYYY-MM-DD
+    const to = qp.to || undefined; // YYYY-MM-DD
+    const limit = Math.min(parseInt(qp.limit || "200", 10), 1000);
 
     let q = supabase
       .from("attendance_days")
@@ -54,6 +64,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ items, users });
   } catch (e: any) {
+    captureError(e, { route: 'admin/attendance:get' });
     if (e instanceof Response) return e;
     return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
   }
@@ -62,13 +73,14 @@ export async function GET(req: Request) {
 // POST: upsert half_day for a specific user/day
 export async function POST(req: Request) {
   try {
+    await rateStrict("admin:attendance:post");
     const { role } = await requireAuth();
     requireAdmin(role);
-    const body = await req.json();
-    const { user_id, day, half_day } = body || {};
-    if (!user_id || !day || typeof half_day !== "boolean") {
-      return NextResponse.json({ error: "user_id, day, half_day required" }, { status: 400 });
-    }
+    const { user_id, day, half_day } = parseJson(await req.json(), z.object({
+      user_id: z.string().min(1),
+      day: z.string().min(1),
+      half_day: z.boolean(),
+    }));
     const { data, error } = await supabase
       .from("attendance_days")
       .upsert({ user_id, day, half_day }, { onConflict: "user_id,day" })
@@ -77,8 +89,8 @@ export async function POST(req: Request) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true, item: data });
   } catch (e: any) {
+    captureError(e, { route: 'admin/attendance:post' });
     if (e instanceof Response) return e;
     return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
   }
 }
-

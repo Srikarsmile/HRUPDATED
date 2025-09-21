@@ -1,0 +1,102 @@
+ ⚠ Port 3000 is in use by process 22969, using available port 3007 instead.
+   ▲ Next.js 15.5.3
+   - Local:        http://localhost:3007
+   - Network:      http://192.168.29.242:3007
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 1856ms
+ ✓ Compiled /middleware in 139ms (114 modules)
+[MIDDLEWARE DEBUG] Detected IP: ::1
+[MIDDLEWARE DEBUG] HR_IP: 
+[MIDDLEWARE DEBUG] HR_IPS: 127.0.0.1,::1
+[MIDDLEWARE DEBUG] HR Set: [ '127.0.0.1', '::1' ]
+[MIDDLEWARE DEBUG] IP in HR set: true
+[MIDDLEWARE DEBUG] Redirecting to admin dashboard
+ ○ Compiling /admin/rt ...
+ ✓ Compiled /admin/rt in 2.1s (1752 modules)
+MUI Grid: The `item` prop has been removed and is no longer necessary. You can safely remove it.
+
+MUI Grid: The `xs` prop has been removed. See https://mui.com/material-ui/migration/upgrade-to-grid-v2/ for migration instructions.
+
+MUI Grid: The `md` prop has been removed. See https://mui.com/material-ui/migration/upgrade-to-grid-v2/ for migration instructions.
+
+ HEAD /admin/rt 200 in 2608ms
+ ○ Compiling / ...
+ ✓ Compiled / in 1722ms (2697 modules)
+ GET / 200 in 2527ms
+ GET / 200 in 336ms
+ ○ Compiling /api/admin/kpis ...
+ ✓ Compiled /api/admin/kpis in 796ms (2789 modules)
+ GET /api/admin/kpis 200 in 2698ms
+ ✓ Compiled in 2.1s (1459 modules)
+ ✓ Compiled in 1017ms (1277 modules)
+ ✓ Compiled / in 320ms (1210 modules)
+ GET / 200 in 1003ms
+ ✓ Compiled in 1630ms (1277 modules)
+ ✓ Compiled in 1199ms (1277 modules)
+[MIDDLEWARE DEBUG] Detected IP: ::1
+[MIDDLEWARE DEBUG] HR_IP: 
+[MIDDLEWARE DEBUG] HR_IPS: 127.0.0.1,::1
+[MIDDLEWARE DEBUG] HR Set: [ '127.0.0.1', '::1' ]
+[MIDDLEWARE DEBUG] IP in HR set: true
+[MIDDLEWARE DEBUG] Redirecting to admin dashboard
+ ✓ Compiled in 544ms (1277 modules)
+ ✓ Compiled in 717ms (1277 modules)
+ ✓ Compiled in 1125ms (1277 modules)
+ ✓ Compiled in 480ms (1277 modules)
+ ✓ Compiled in 1052ms (1277 modules)
+ ✓ Compiled in 604ms (1277 modules)
+ ✓ Compiled in 2s (1277 modules)
+ ✓ Compiled in 850ms (1277 modules)
+ ✓ Compiled in 861ms (1377 modules)
+ ✓ Compiled in 1370ms (1277 modules)
+ ✓ Compiled in 511ms (1277 modules)
+ ✓ Compiled in 598ms (1377 modules)
+ ✓ Compiled in 353ms (1277 modules)
+ ✓ Compiled in 336ms (1277 modules)
+ ✓ Compiled in 512ms (1277 modules)
+ ✓ Compiled in 1186ms (1377 modules)
+ ✓ Compiled in 479ms (1277 modules)
+ ✓ Compiled in 378ms (1277 modules)
+ ✓ Compiled in 363ms (1277 modules)
+   Reload env: .env.local
+ ✓ Compiled in 313ms (1377 modules)
+   Reload env: .env.local
+ ✓ Compiled in 1992ms (1377 modules)
+ ✓ Compiled in 1516ms (1391 modules)
+ ✓ Compiled in 1411ms (1277 modules)
+ ✓ Compiled in 2.2s (1277 modules)
+ ✓ Compiled in 1495ms (1277 modules)
+ ✓ Compiled in 933ms (1277 modules)
+ ✓ Compiled in 1676ms (1277 modules)
+ ✓ Compiled in 1901ms (1277 modules)
+ ✓ Compiled in 2.4s (1277 modules)
+ ✓ Compiled in 1666ms (1277 modules)
+ ✓ Compiled in 1227ms (1277 modules)
+ ✓ Compiled in 512ms (1277 modules)
+ ✓ Compiled in 1616ms (1277 modules)
+ ✓ Compiled in 1662ms (1277 modules)
+ ✓ Compiled in 2.8s (1277 modules)
+ ✓ Compiled in 815ms (1277 modules)
+ ✓ Compiled in 1082ms (1277 modules)
+ ✓ Compiled in 4.8s (1277 modules)
+ ✓ Compiled in 3.6s (1277 modules)
+ ✓ Compiled in 1334ms (1277 modules)
+ ✓ Compiled in 669ms (1277 modules)
+ ✓ Compiled in 522ms (1277 modules)
+ ✓ Compiled in 3.5s (1277 modules)
+ ✓ Compiled in 1083ms (1277 modules)
+ ✓ Compiled in 1521ms (1277 modules)
+ ✓ Compiled in 1923ms (1277 modules)
+ ✓ Compiled in 3.5s (1377 modules)
+ ✓ Compiled in 1203ms (1277 modules)
+ ✓ Compiled in 2.9s (1277 modules)
+ ✓ Compiled in 932ms (1277 modules)
+ ✓ Compiled in 1181ms (1277 modules)
+ ✓ Compiled in 609ms (1277 modules)
+ ✓ Compiled in 9.8s (1277 modules)
+ ✓ Compiled in 4.8s (1277 modules)
+ ✓ Compiled in 6.6s (1277 modules)
+ ✓ Compiled in 8.7s (1277 modules)
+ ✓ Compiled in 3.7s (1277 modules)

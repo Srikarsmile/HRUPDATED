@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabaseServer as supabase } from "@/lib/supabaseServer";
 import { requireAuth, requireAdmin } from "@/lib/auth";
+import { standard as rateStandard } from "@/lib/rate";
+import { captureError } from "@/lib/monitoring";
 
 type KPIResponse = {
   pendingLeaves: number;
@@ -16,6 +18,7 @@ type KPIResponse = {
 
 export async function GET() {
   try {
+    await rateStandard("admin:kpis:get");
     const { role } = await requireAuth();
     requireAdmin(role);
 
@@ -116,8 +119,8 @@ export async function GET() {
     };
     return NextResponse.json(body);
   } catch (e: any) {
+    captureError(e, { route: 'admin/kpis:get' });
     if (e instanceof Response) return e;
     return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
   }
 }
-

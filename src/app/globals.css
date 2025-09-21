@@ -1,13 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  /* White background */
+  /* Enhanced color palette */
   --background: #ffffff;
   --foreground: #1a1d29;
-  --card-background: rgba(255, 255, 255, 0.96);
-  --border-light: rgba(226, 232, 240, 0.55);
-  --glass-bg: rgba(255, 255, 255, 0.1);
-  --glass-border: rgba(255, 255, 255, 0.22);
+  --card-background: rgba(255, 255, 255, 0.98);
+  --border-light: rgba(226, 232, 240, 0.6);
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.3);
+  --shadow-color: rgba(0, 0, 0, 0.1);
+  --accent-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --surface-gradient: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
 }
 
 @theme inline {
@@ -19,13 +22,14 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    /* White background for dark mode too */
-    --background: #ffffff;
+    --background: #0b1120;
     --foreground: #e2e8f0;
-    --card-background: rgba(17, 24, 39, 0.9);
-    --border-light: rgba(71, 85, 105, 0.35);
-    --glass-bg: rgba(15, 23, 42, 0.75);
-    --glass-border: rgba(148, 163, 184, 0.14);
+    --card-background: rgba(15, 23, 42, 0.95);
+    --border-light: rgba(71, 85, 105, 0.4);
+    --glass-bg: rgba(15, 23, 42, 0.8);
+    --glass-border: rgba(148, 163, 184, 0.2);
+    --shadow-color: rgba(0, 0, 0, 0.3);
+    --surface-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
   }
 }
 
@@ -33,6 +37,16 @@
   box-sizing: border-box;
   padding: 0;
   margin: 0;
+}
+
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
 }
 
 html,
@@ -45,19 +59,31 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
-  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
+/* Enhanced glass morphism */
 .glass {
   background: var(--glass-bg);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
   border: 1px solid var(--glass-border);
+  position: relative;
 }
 
+.glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* Enhanced gradients */
 .gradient-primary {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
@@ -78,43 +104,777 @@ body {
   background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
 }
 
+.gradient-surface {
+  background: var(--surface-gradient);
+}
+
+/* Enhanced animations */
 .animate-glow {
   animation: glow 2s ease-in-out infinite alternate;
 }
 
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-pulse-slow {
+  animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.animate-shimmer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  animation: shimmer 1.5s infinite;
+}
+
 @keyframes glow {
   from {
-    box-shadow: 0 0 5px rgba(59, 130, 246, 0.2);
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
   }
   to {
-    box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.6);
   }
 }
 
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Enhanced card styles */
 .card {
   background: var(--card-background);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
   border: 1px solid var(--border-light);
-  border-radius: 1rem;
-  transition: all 0.3s ease;
+  border-radius: 1.25rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  /* Remove default margin to prevent collisions */
+  margin-bottom: 0;
+}
+
+/* Cards in grids should have no margin */
+.card-grid .card,
+.card-grid-responsive .card {
+  margin-bottom: 0;
+}
+
+/* Remove margin when cards are in grids or containers */
+.grid .card,
+.container .card,
+.card-grid .card,
+.card-grid-responsive .card,
+.dashboard-container .card {
+  margin-bottom: 0;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
 .card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 40px -12px rgba(17, 24, 39, 0.18), 0 2px 10px -4px rgba(17, 24, 39, 0.06);
+  transform: translateY(-4px) scale(1.01);
+  box-shadow:
+    0 20px 60px -12px var(--shadow-color),
+    0 4px 16px -4px var(--shadow-color);
+  border-color: rgba(99, 102, 241, 0.3);
 }
 
-/* Minimal UI helpers used by pages */
+.card:hover::before {
+  opacity: 1;
+}
+
+/* Enhanced button styles */
 .btn {
-  @apply px-4 py-2 rounded-lg bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100 border border-black/5 dark:border-white/10 hover:bg-gray-200 dark:hover:bg-gray-600 transition;
+  @apply px-4 py-2.5 rounded-xl font-semibold transition-all duration-200;
+  @apply bg-white/80 text-gray-700 border border-gray-200/60;
+  @apply hover:bg-gray-50 hover:border-gray-300 hover:shadow-md hover:-translate-y-0.5;
+  @apply dark:bg-gray-800/80 dark:text-gray-200 dark:border-gray-700/60;
+  @apply dark:hover:bg-gray-700 dark:hover:border-gray-600;
+  backdrop-filter: blur(8px);
 }
+
 .btn-primary {
-  @apply bg-blue-600 text-white hover:bg-blue-700;
+  @apply bg-gradient-to-r from-blue-600 to-purple-600 text-white border-0;
+  @apply hover:from-blue-700 hover:to-purple-700 hover:shadow-lg hover:shadow-blue-500/25;
 }
+
 .btn-secondary {
-  @apply bg-purple-600 text-white hover:bg-purple-700;
+  @apply bg-gradient-to-r from-purple-600 to-pink-600 text-white border-0;
+  @apply hover:from-purple-700 hover:to-pink-700 hover:shadow-lg hover:shadow-purple-500/25;
 }
+
 .input {
-  @apply w-full px-3 py-2 rounded-lg bg-white/80 dark:bg-gray-800/70 border border-black/5 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-blue-400;
+  @apply w-full px-4 py-3 rounded-xl bg-white/90 border border-gray-200/60;
+  @apply focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400;
+  @apply dark:bg-gray-800/90 dark:border-gray-700/60 dark:focus:border-blue-500;
+  @apply transition-all duration-200;
+  backdrop-filter: blur(8px);
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.5);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.7);
+  background-clip: content-box;
+}
+
+/* Dark mode scrollbars */
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar-thumb {
+    background: rgba(75, 85, 99, 0.5);
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(107, 114, 128, 0.7);
+    background-clip: content-box;
+  }
+}
+
+/* Enhanced Focus styles for accessibility */
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:ring-offset-2 focus:ring-offset-white;
+  @apply dark:focus:ring-offset-gray-900;
+}
+
+/* Screen reader only content */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Focus visible improvements */
+.focus-visible:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Skip link for keyboard navigation */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 6px;
+  background: #3b82f6;
+  color: white;
+  padding: 8px;
+  text-decoration: none;
+  border-radius: 4px;
+  z-index: 1000;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.skip-link:focus {
+  top: 6px;
+}
+
+/* Improved button and interactive element accessibility */
+button:focus-visible,
+[role="button"]:focus-visible,
+.btn:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* High contrast mode enhancements */
+@media (forced-colors: active) {
+  .card {
+    border: 1px solid ButtonText;
+    background: ButtonFace;
+  }
+
+  .btn {
+    border: 1px solid ButtonText;
+    background: ButtonFace;
+    color: ButtonText;
+  }
+
+  .btn:hover {
+    background: Highlight;
+    color: HighlightText;
+  }
+}
+
+/* Motion preference aware animations */
+@media (prefers-reduced-motion: no-preference) {
+  .animate-on-preference {
+    animation: fadeIn 0.5s ease-in-out;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Enhanced spacing utilities */
+.gap-enhanced {
+  gap: 1.5rem;
+}
+
+.gap-enhanced-lg {
+  gap: 2rem;
+}
+
+.gap-enhanced-xl {
+  gap: 2.5rem;
+}
+
+/* Dashboard specific spacing */
+.dashboard-section {
+  margin-bottom: 2rem;
+}
+
+.dashboard-section-lg {
+  margin-bottom: 3rem;
+}
+
+.dashboard-section-xl {
+  margin-bottom: 4rem;
+}
+
+@media (min-width: 768px) {
+  .gap-enhanced {
+    gap: 2rem;
+  }
+
+  .gap-enhanced-lg {
+    gap: 2.5rem;
+  }
+
+  .gap-enhanced-xl {
+    gap: 3rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .gap-enhanced {
+    gap: 2.5rem;
+  }
+
+  .gap-enhanced-lg {
+    gap: 3rem;
+  }
+
+  .gap-enhanced-xl {
+    gap: 3.5rem;
+  }
+}
+
+/* Card spacing improvements */
+.card-grid {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.card-grid-responsive {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: 1fr;
+}
+
+/* Dashboard card spacing */
+.dashboard-cards {
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+}
+
+.dashboard-cards .card {
+  margin-bottom: 0;
+}
+
+/* Card internal spacing fixes */
+.card-header {
+  padding-bottom: 0.75rem;
+}
+
+.card-content {
+  padding-top: 0.5rem;
+}
+
+/* Prevent text collision in cards */
+.card h1, .card h2, .card h3, .card h4, .card h5, .card h6 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.card p {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .card-grid {
+    gap: 2rem;
+  }
+
+  .card-grid-responsive {
+    gap: 2rem;
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .card-grid {
+    gap: 2.5rem;
+  }
+
+  .card-grid-responsive {
+    gap: 2.5rem;
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1280px) {
+  .card-grid {
+    gap: 3rem;
+  }
+
+  .card-grid-responsive {
+    gap: 3rem;
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* Landing page card spacing */
+.feature-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+}
+
+@media (min-width: 768px) {
+  .feature-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .feature-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3rem;
+  }
+}
+
+/* Utility classes for enhanced effects */
+.text-gradient {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.border-gradient {
+  border: 2px solid transparent;
+  background: linear-gradient(white, white) padding-box,
+              linear-gradient(135deg, #667eea, #764ba2) border-box;
+}
+
+.shadow-glow {
+  box-shadow: 0 0 30px rgba(99, 102, 241, 0.3);
+}
+
+/* New card shadow effects */
+.shadow-neumorphic {
+  box-shadow:
+    8px 8px 16px rgba(163, 177, 198, 0.5),
+    -8px -8px 16px rgba(255, 255, 255, 0.8);
+}
+
+.shadow-neumorphic-dark {
+  box-shadow:
+    8px 8px 16px rgba(0, 0, 0, 0.3),
+    -8px -8px 16px rgba(55, 65, 81, 0.1);
+}
+
+.shadow-neumorphic-hover {
+  box-shadow:
+    12px 12px 24px rgba(163, 177, 198, 0.6),
+    -12px -12px 24px rgba(255, 255, 255, 0.9),
+    inset 2px 2px 4px rgba(163, 177, 198, 0.2);
+}
+
+.shadow-neumorphic-hover-dark {
+  box-shadow:
+    12px 12px 24px rgba(0, 0, 0, 0.4),
+    -12px -12px 24px rgba(55, 65, 81, 0.2),
+    inset 2px 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.shadow-floating {
+  box-shadow:
+    0 8px 32px rgba(31, 38, 135, 0.15),
+    0 4px 16px rgba(31, 38, 135, 0.1);
+}
+
+.shadow-floating-dark {
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.shadow-floating-hover {
+  box-shadow:
+    0 16px 48px rgba(31, 38, 135, 0.2),
+    0 8px 24px rgba(31, 38, 135, 0.15);
+}
+
+.shadow-floating-hover-dark {
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.4),
+    0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.shadow-magnetic {
+  box-shadow:
+    0 10px 40px rgba(99, 102, 241, 0.2),
+    0 4px 16px rgba(99, 102, 241, 0.1);
+}
+
+.shadow-holographic {
+  box-shadow:
+    0 12px 40px rgba(168, 85, 247, 0.15),
+    0 6px 20px rgba(59, 130, 246, 0.1),
+    0 2px 8px rgba(16, 185, 129, 0.05);
+}
+
+.shadow-border-glow {
+  box-shadow:
+    inset 0 0 0 1px rgba(99, 102, 241, 0.3),
+    0 0 20px rgba(99, 102, 241, 0.2);
+}
+
+.shadow-3xl {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+/* Enhanced interactive states */
+.interactive {
+  @apply transition-all duration-200 cursor-pointer;
+}
+
+.interactive:hover {
+  @apply transform -translate-y-1 shadow-lg;
+}
+
+.interactive:active {
+  @apply transform translate-y-0;
+}
+
+/* Loading states */
+.loading-shimmer {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@media (prefers-color-scheme: dark) {
+  .loading-shimmer {
+    background: linear-gradient(90deg, #374151 25%, #4b5563 50%, #374151 75%);
+    background-size: 200% 100%;
+  }
+}
+
+/* Enhanced Mobile-specific optimizations */
+@media (max-width: 768px) {
+  .card {
+    border-radius: 1rem;
+    /* Remove margins on mobile to prevent collisions */
+    margin-bottom: 0;
+  }
+  
+  .dashboard-section {
+    margin-bottom: 1.5rem;
+  }
+  
+  .dashboard-section-lg {
+    margin-bottom: 2rem;
+  }
+  
+  .dashboard-section-xl {
+    margin-bottom: 2.5rem;
+  }
+
+  .card:hover {
+    transform: translateY(-2px) scale(1.005);
+  }
+
+  /* Enhanced touch targets for better accessibility */
+  button,
+  .btn,
+  [role="button"],
+  input[type="button"],
+  input[type="submit"],
+  .interactive {
+    min-height: 48px;
+    min-width: 48px;
+    padding: 12px 16px;
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+
+  /* Calendar optimizations for mobile */
+  .calendar-day {
+    min-height: 44px;
+    min-width: 44px;
+    font-size: 14px;
+  }
+
+  /* Better spacing for mobile grids */
+  .grid-mobile {
+    gap: 1rem;
+    padding: 1rem;
+  }
+
+  /* Optimize card animations for mobile performance */
+  .card-mobile {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    will-change: transform;
+  }
+
+  .card-mobile:hover {
+    transform: translateY(-1px);
+  }
+
+  /* Better text sizing for mobile */
+  html {
+    font-size: 16px;
+  }
+
+  h1 {
+    font-size: 1.75rem;
+    line-height: 1.2;
+  }
+
+  h2 {
+    font-size: 1.5rem;
+    line-height: 1.3;
+  }
+
+  h3 {
+    font-size: 1.25rem;
+    line-height: 1.4;
+  }
+
+  /* Prevent horizontal scroll */
+  body {
+    overflow-x: hidden;
+  }
+
+  /* Safe area support for modern devices */
+  .safe-area-inset {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Mobile-specific modal and drawer optimizations */
+  .modal-mobile {
+    border-radius: 1rem 1rem 0 0;
+    max-height: 90vh;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+  }
+
+  /* Swipe gestures support */
+  .swipeable {
+    touch-action: pan-y;
+    user-select: none;
+  }
+
+  /* Better input focus states for mobile */
+  input:focus,
+  textarea:focus,
+  select:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+    border-color: #3b82f6;
+  }
+}
+
+/* Tablet optimizations */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .card {
+    border-radius: 1.25rem;
+  }
+
+  .btn {
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+  }
+
+  .grid-tablet {
+    gap: 1.5rem;
+    padding: 1.5rem;
+  }
+}
+
+/* Small mobile devices */
+@media (max-width: 480px) {
+  .card {
+    margin: 0.5rem;
+    border-radius: 0.75rem;
+  }
+
+  .btn {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  /* Smaller text for very small screens */
+  h1 {
+    font-size: 1.5rem;
+  }
+
+  h2 {
+    font-size: 1.25rem;
+  }
+
+  h3 {
+    font-size: 1.125rem;
+  }
+
+  /* More compact spacing */
+  .grid-mobile {
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+}
+
+/* Reduce motion for accessibility and low-end devices */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .card:hover {
+    transform: none !important;
+  }
+
+  .interactive:hover {
+    transform: none !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .card {
+    border: 2px solid;
+    border-color: currentColor;
+  }
+
+  .btn {
+    border: 2px solid;
+    border-color: currentColor;
+  }
+
+  .shadow-glow,
+  .shadow-floating,
+  .shadow-magnetic,
+  .shadow-holographic {
+    box-shadow: none;
+  }
+}
+
+/* Dark mode specific mobile optimizations */
+@media (max-width: 768px) and (prefers-color-scheme: dark) {
+  .card {
+    background: rgba(15, 23, 42, 0.95);
+    border-color: rgba(71, 85, 105, 0.4);
+  }
+
+  .btn {
+    background: rgba(30, 41, 59, 0.8);
+    color: #e2e8f0;
+  }
+}
+
+/* High DPI/Retina displays */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .card::before {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, transparent 50%);
+  }
+}
+
+/* Landscape phone optimization */
+@media (max-height: 500px) and (orientation: landscape) {
+  .card {
+    padding: 0.75rem;
+  }
+}
+
+/* Large touch devices (tablets) */
+@media (min-width: 768px) and (max-width: 1024px) and (pointer: coarse) {
+  .btn {
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+  }
+
+  .card {
+    padding: 1.5rem;
+  }
 }

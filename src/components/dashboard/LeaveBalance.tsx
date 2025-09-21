@@ -1,35 +1,48 @@
 import React from 'react';
 
+type ApiItem = { type: 'annual'|'sick'|'casual'; total: number; used: number; balance: number };
+
 const LeaveBalance = () => {
-  const leaveData = [
-    {
-      type: 'Annual',
-      balance: 15,
-      total: 21,
-      icon: '🏖️',
-      gradient: 'from-blue-500 to-cyan-500',
-      bgGradient: 'from-blue-50 to-cyan-50',
-      darkBgGradient: 'from-blue-900/20 to-cyan-900/20'
-    },
-    {
-      type: 'Sick',
-      balance: 8,
-      total: 12,
-      icon: '🏥',
-      gradient: 'from-red-500 to-pink-500',
-      bgGradient: 'from-red-50 to-pink-50',
-      darkBgGradient: 'from-red-900/20 to-pink-900/20'
-    },
-    {
-      type: 'Casual',
-      balance: 10,
-      total: 12,
-      icon: '☕',
-      gradient: 'from-green-500 to-teal-500',
-      bgGradient: 'from-green-50 to-teal-50',
-      darkBgGradient: 'from-green-900/20 to-teal-900/20'
-    },
-  ];
+  const [items, setItems] = React.useState<ApiItem[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        setLoading(true);
+        const res = await fetch('/api/leave/balance', { cache: 'no-store' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to load leave balance');
+        setItems(data.items || []);
+      } catch (e: any) {
+        setError(e?.message || 'Failed to load leave balance');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const mapping = {
+    annual: { label: 'Annual', icon: '🏖️', gradient: 'from-blue-500 to-cyan-500', bg: 'from-blue-50 to-cyan-50', darkBg: 'from-blue-900/20 to-cyan-900/20' },
+    sick:   { label: 'Sick',   icon: '🏥',  gradient: 'from-red-500 to-pink-500',  bg: 'from-red-50 to-pink-50',  darkBg: 'from-red-900/20 to-pink-900/20' },
+    casual: { label: 'Casual', icon: '☕',  gradient: 'from-green-500 to-teal-500',bg: 'from-green-50 to-teal-50',darkBg: 'from-green-900/20 to-teal-900/20' },
+  } as const;
+
+  const leaveData = (['annual','sick','casual'] as const).map((k) => {
+    const item = items.find((i) => i.type === k);
+    const total = item?.total ?? (k === 'annual' ? 21 : 12);
+    const balance = item?.balance ?? total;
+    return {
+      type: mapping[k].label,
+      balance,
+      total,
+      icon: mapping[k].icon,
+      gradient: mapping[k].gradient,
+      bgGradient: mapping[k].bg,
+      darkBgGradient: mapping[k].darkBg,
+    };
+  });
 
   const getPercentage = (balance: number, total: number) => (balance / total) * 100;
 
@@ -47,7 +60,8 @@ const LeaveBalance = () => {
         </div>
         <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Leave Balance</h3>
       </div>
-
+      {error && <div className="text-sm text-red-600 mb-4">{error}</div>}
+      {loading && <div className="text-sm text-gray-500 mb-4">Loading…</div>}
       <div className="space-y-6">
         {leaveData.map((leave) => {
           const percentage = getPercentage(leave.balance, leave.total);

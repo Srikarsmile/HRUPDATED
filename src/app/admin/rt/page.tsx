@@ -69,6 +69,7 @@ type KPI = {
 
 type Approval = { id: string; user_id: string; kind: "Leave" | "Regularization"; when: string; reason?: string };
 type AttRow = { user_id: string; day: string; half_day: boolean; disconnects: number };
+type Profile = { user_id: string; name: string | null; email?: string | null; department?: string | null; employee_id?: string | null; found?: boolean };
 
 function KCard({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color: string }) {
   return (
@@ -92,6 +93,7 @@ export default function AdminRealtimePage() {
   const [error, setError] = React.useState<string | null>(null);
   const [demoMode, setDemoMode] = React.useState<boolean>(false);
   const [toast, setToast] = React.useState<{ open: boolean; msg: string; sev: "success" | "error" | "info" }>({ open: false, msg: "", sev: "success" });
+  const [me, setMe] = React.useState<Profile | null>(null);
 
   const computeRange = React.useCallback(() => {
     const now = new Date();
@@ -158,9 +160,21 @@ export default function AdminRealtimePage() {
 
   React.useEffect(() => { load(); }, [load, range]);
 
+  // Load current HR profile (for greeting)
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/employee/profile', { cache: 'no-store' });
+        const data = await res.json();
+        if (res.ok) setMe(data);
+      } catch {}
+    })();
+  }, []);
+
   // Realtime subscriptions for quick refresh (only in real data mode)
   React.useEffect(() => {
-    if (!supabase || demoMode) return;
+    const enableClientSupabase = String(process.env.NEXT_PUBLIC_ENABLE_CLIENT_SUPABASE || 'false') === 'true';
+    if (!supabase || demoMode || !enableClientSupabase) return;
     const channel = supabase
       .channel("admin-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "leave_requests" }, () => load())
@@ -170,6 +184,23 @@ export default function AdminRealtimePage() {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [load, demoMode]);
+
+  // Realtime updates for current HR profile (greeting)
+  React.useEffect(() => {
+    const enableClientSupabase = String(process.env.NEXT_PUBLIC_ENABLE_CLIENT_SUPABASE || 'false') === 'true';
+    if (!supabase || demoMode || !me?.user_id || !enableClientSupabase) return;
+    const ch = supabase
+      .channel("admin-self")
+      .on("postgres_changes", { event: "*", schema: "public", table: "employees", filter: `user_id=eq.${me.user_id}` }, async () => {
+        try {
+          const res = await fetch('/api/employee/profile', { cache: 'no-store' });
+          const data = await res.json();
+          if (res.ok) setMe(data);
+        } catch {}
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [demoMode, me?.user_id]);
 
   const act = async (item: Approval, action: "approve" | "reject") => {
     try {
@@ -189,6 +220,23 @@ export default function AdminRealtimePage() {
 
   return (
     <ThemeProvider theme={theme}>
+      {/* Ensure full-page white background for admin dashboard */}
+      <Box
+        sx={{
+          bgcolor: "#fff",
+          minHeight: "100vh",
+          "& h1, & h2, & h3, & h4, & h5, & h6": { color: "#000 !important" },
+          "& .MuiTypography-root.MuiTypography-h1, & .MuiTypography-root.MuiTypography-h2, & .MuiTypography-root.MuiTypography-h3, & .MuiTypography-root.MuiTypography-h4, & .MuiTypography-root.MuiTypography-h5, & .MuiTypography-root.MuiTypography-h6": {
+            color: "#000 !important",
+          },
+        }}
+        style={{
+          // Force white backgrounds within admin dashboard regardless of OS theme
+          ['--background' as any]: '#ffffff',
+          ['--card-background' as any]: '#ffffff',
+          ['--surface-gradient' as any]: '#ffffff',
+        }}
+      >
       <Container sx={{ py: 4 }}>
         {/* Header */}
         <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} spacing={2} sx={{ mb: 3 }}>
@@ -206,6 +254,9 @@ export default function AdminRealtimePage() {
               )}
             </Stack>
             <Typography color="text.secondary">Real‑time approvals • Attendance • Signals</Typography>
+            <Typography variant="subtitle2" sx={{ mt: 0.5 }}>
+              {me?.name ? `Welcome, ${me.name}` : "Welcome"}
+            </Typography>
           </Box>
           <Stack direction="row" spacing={2} alignItems="center">
             <FormControlLabel
@@ -217,7 +268,10 @@ export default function AdminRealtimePage() {
                 />
               }
               label="Demo Data"
-              sx={{ margin: 0 }}
+              sx={{
+                margin: 0,
+                '.MuiFormControlLabel-label': { color: '#000 !important' },
+              }}
             />
             <Button variant="outlined" startIcon={<RefreshRoundedIcon />} onClick={load}>Refresh</Button>
           </Stack>
@@ -355,6 +409,7 @@ export default function AdminRealtimePage() {
           <Alert severity={toast.sev} onClose={() => setToast({ ...toast, open: false })}>{toast.msg}</Alert>
         </Snackbar>
       </Container>
+      </Box>
     </ThemeProvider>
   );
 }

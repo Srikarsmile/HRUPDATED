@@ -11,8 +11,6 @@ import {
   Chip,
   Divider,
   Button,
-  Tabs,
-  Tab,
   TextField,
   MenuItem,
   Snackbar,
@@ -23,14 +21,16 @@ import {
   Switch,
   FormControlLabel,
 } from "@mui/material";
-import { ThemeProvider, createTheme, alpha } from "@mui/material/styles";
+import { ThemeProvider, createTheme } from "@mui/material/styles";
 import TodayRoundedIcon from "@mui/icons-material/TodayRounded";
 import CalendarMonthRoundedIcon from "@mui/icons-material/CalendarMonthRounded";
 import AccessTimeRoundedIcon from "@mui/icons-material/AccessTimeRounded";
 import WifiRoundedIcon from "@mui/icons-material/WifiRounded";
-import TimelineRoundedIcon from "@mui/icons-material/TimelineRounded";
 import ErrorRoundedIcon from "@mui/icons-material/ErrorRounded";
 import { supabase } from "@/lib/supabase";
+import KPIStats from "@/components/dashboard/KPIStats";
+import AttendanceCalendar from "@/components/dashboard/AttendanceCalendar";
+import QuickActions from "@/components/dashboard/QuickActions";
 
 type Range = "today" | "week" | "month";
 type MyKPI = { presentPct: number; halfDays: number; pending: number; unit: string; recent: number[] };
@@ -55,18 +55,14 @@ const theme = createTheme({
   typography: { button: { textTransform: "none", fontWeight: 700 } },
 });
 
-function MiniStat({ label, value, color }: { label: string; value: string; color: "primary" | "secondary" | "success" | "warning" | "error" | "info" }) {
-  return (
-    <Card variant="outlined">
-      <CardContent>
-        <Typography variant="overline" color={`${color}.main`}>{label}</Typography>
-        <Typography variant="h5" fontWeight={800}>{value}</Typography>
-      </CardContent>
-    </Card>
-  );
+
+interface LeavePayload {
+  start_date: string;
+  end_date: string;
+  reason: string;
 }
 
-function LeaveForm({ onSubmit }: { onSubmit: (payload: any) => Promise<void> }) {
+function LeaveForm({ onSubmit }: { onSubmit: (payload: LeavePayload) => Promise<void> }) {
   const [from, setFrom] = React.useState("");
   const [to, setTo] = React.useState("");
   const [note, setNote] = React.useState("");
@@ -85,7 +81,14 @@ function LeaveForm({ onSubmit }: { onSubmit: (payload: any) => Promise<void> }) 
   );
 }
 
-function RegularizationForm({ onSubmit }: { onSubmit: (payload: any) => Promise<void> }) {
+interface RegularizationPayload {
+  date: string;
+  reason: string;
+  kind: string;
+  note: string;
+}
+
+function RegularizationForm({ onSubmit }: { onSubmit: (payload: RegularizationPayload) => Promise<void> }) {
   const [date, setDate] = React.useState("");
   const [reason, setReason] = React.useState("Missed punch");
   const [note, setNote] = React.useState("");
@@ -113,6 +116,8 @@ export default function EmployeeDashboard() {
   const [loading, setLoading] = React.useState<boolean>(true);
   const [error, setError] = React.useState<string | null>(null);
   const [wifiAllowed, setWifiAllowed] = React.useState<boolean | null>(null);
+  const [geoAllowed, setGeoAllowed] = React.useState<boolean | null>(null);
+  const [geoMsg, setGeoMsg] = React.useState<string>("");
 
   const [kpi, setKpi] = React.useState<MyKPI | null>(null);
   const [events, setEvents] = React.useState<MyEvent[]>([]);
@@ -205,20 +210,18 @@ export default function EmployeeDashboard() {
       ].slice(0, 8);
       setRecent(reqs);
 
-      // Attendance punch logs (read-only from supabase anon)
+      // Attendance punch logs (server API; avoids anon RLS reads in prod)
       const { from, to } = computeRangeStrings(range);
-      if (who?.userId && supabase) {
-        const { data } = await supabase
-          .from("attendance_logs")
-          .select("id,at,type,method")
-          .eq("user_id", who.userId)
-          .gte("at", new Date(from).toISOString())
-          .lte("at", new Date(new Date(to).getTime() + 24 * 3600 * 1000 - 1).toISOString())
-          .order("at", { ascending: false })
-          .limit(10);
-        const evs: MyEvent[] = (data || []).map((row: any) => ({ id: String(row.id), date: new Date(row.at).toLocaleString(), kind: row.type, method: row.method }));
-        setEvents(evs);
-      } else {
+      try {
+        const logsRes = await fetch(`/api/attendance/logs?from=${from}&to=${to}&limit=10`, { cache: "no-store" });
+        const logs = await logsRes.json();
+        if (logsRes.ok) {
+          const evs: MyEvent[] = (logs.items || []).map((row: any) => ({ id: String(row.id), date: new Date(row.at).toLocaleString(), kind: row.type, method: row.method }));
+          setEvents(evs);
+        } else {
+          setEvents([]);
+        }
+      } catch {
         setEvents([]);
       }
 
@@ -241,17 +244,56 @@ export default function EmployeeDashboard() {
     loadAll();
 
     // Only set up real-time subscriptions if not in demo mode
-    if (!demoMode) {
+    const enableClientSupabase = String(process.env.NEXT_PUBLIC_ENABLE_CLIENT_SUPABASE || 'false') === 'true';
+    if (!demoMode && enableClientSupabase) {
       const ch = supabase
         .channel("emp-dashboard")
         .on("postgres_changes", { event: "*", schema: "public", table: "attendance_days" }, () => loadAll())
         .on("postgres_changes", { event: "*", schema: "public", table: "leave_requests" }, () => loadAll())
         .on("postgres_changes", { event: "*", schema: "public", table: "regularizations" }, () => loadAll())
         .on("postgres_changes", { event: "*", schema: "public", table: "disconnect_events" }, () => loadAll())
+        .on("postgres_changes", { event: "*", schema: "public", table: "employees" }, () => loadAll())
+        .on("postgres_changes", { event: "*", schema: "public", table: "attendance_logs" }, () => loadAll())
         .subscribe();
       return () => { supabase.removeChannel(ch); };
     }
   }, [range, demoMode]);
+
+  // Real-time geofence check using browser location
+  React.useEffect(() => {
+    let watchId: number | null = null;
+    if (typeof window !== 'undefined' && navigator.geolocation) {
+      const onPos = async (pos: GeolocationPosition) => {
+        try {
+          const { latitude, longitude } = pos.coords;
+          const url = `/api/network/geo/check?lat=${latitude}&lng=${longitude}`;
+          const res = await fetch(url, { cache: 'no-store' });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Geo check failed');
+          if (data.configured === false) {
+            // If no fence configured, do not block access
+            setGeoAllowed(true);
+            setGeoMsg('');
+          } else {
+            setGeoAllowed(!!data.allowed);
+            setGeoMsg(data.allowed ? '' : 'Come to office lazy fellow!!!');
+          }
+        } catch (e: any) {
+          setGeoAllowed(false);
+          setGeoMsg('Location check failed');
+        }
+      };
+      const onErr = () => {
+        setGeoAllowed(false);
+        setGeoMsg('Location permission denied');
+      };
+      watchId = navigator.geolocation.watchPosition(onPos, onErr, { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 });
+    } else {
+      setGeoAllowed(false);
+      setGeoMsg('Geolocation not available');
+    }
+    return () => { if (watchId !== null) navigator.geolocation.clearWatch(watchId); };
+  }, []);
 
   async function applyLeave(payload: any) {
     try {
@@ -306,6 +348,23 @@ export default function EmployeeDashboard() {
 
   return (
     <ThemeProvider theme={theme}>
+      {/* Ensure full-page white background for dashboard */}
+      <Box
+        sx={{
+          bgcolor: "#fff",
+          minHeight: "100vh",
+          "& h1, & h2, & h3, & h4, & h5, & h6": { color: "#000 !important" },
+          "& .MuiTypography-root.MuiTypography-h1, & .MuiTypography-root.MuiTypography-h2, & .MuiTypography-root.MuiTypography-h3, & .MuiTypography-root.MuiTypography-h4, & .MuiTypography-root.MuiTypography-h5, & .MuiTypography-root.MuiTypography-h6": {
+            color: "#000 !important",
+          },
+        }}
+        style={{
+          // Force white backgrounds within dashboard regardless of OS theme
+          ['--background' as any]: '#ffffff',
+          ['--card-background' as any]: '#ffffff',
+          ['--surface-gradient' as any]: '#ffffff',
+        }}
+      >
       <Container sx={{ py: 4 }}>
         <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} spacing={2} sx={{ mb: 3 }}>
           <Box>
@@ -340,7 +399,10 @@ export default function EmployeeDashboard() {
                 />
               }
               label="Demo Data"
-              sx={{ margin: 0 }}
+              sx={{
+                margin: 0,
+                '.MuiFormControlLabel-label': { color: '#000 !important' },
+              }}
             />
             <ToggleButtonGroup value={range} exclusive onChange={(e, v) => v && setRange(v)} size="small" color="secondary">
               <ToggleButton value="today"><TodayRoundedIcon sx={{ mr: 0.5 }} />Today</ToggleButton>
@@ -353,118 +415,176 @@ export default function EmployeeDashboard() {
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
         {loading ? (
-          <Grid container spacing={2} sx={{ mb: 1 }}>
+          <Grid container spacing={4} sx={{ mb: 4 }}>
             {[0, 1, 2, 3].map((i) => (
-              <Grid item xs={12} md={3} key={i}><Skeleton variant="rounded" height={96} /></Grid>
+              <Grid item xs={12} md={3} key={i}><Skeleton variant="rounded" height={120} sx={{ borderRadius: 3 }} /></Grid>
             ))}
           </Grid>
         ) : (
-          <Grid container spacing={2} sx={{ mb: 2 }}>
-            <Grid item xs={12} md={4}><MiniStat label="Present" value={`${kpi?.presentPct ?? 0}%`} color="success" /></Grid>
-            <Grid item xs={12} md={4}><MiniStat label="Half‑days (this period)" value={`${kpi?.halfDays ?? 0}`} color="warning" /></Grid>
-            <Grid item xs={12} md={4}><MiniStat label="Pending requests" value={`${kpi?.pending ?? 0}`} color="info" /></Grid>
-          </Grid>
+          <Box sx={{ mb: 6 }}>
+            <KPIStats />
+          </Box>
         )}
 
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={7}>
-            <Card variant="outlined" sx={{ position: "relative", overflow: "hidden" }}>
-              <CardContent>
-                <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} spacing={1}>
-                  <Box>
-                    <Typography variant="overline" sx={{ opacity: 0.8 }}>{range === "today" ? "Today" : range === "week" ? "This Week" : "This Month"}</Typography>
-                    <Typography variant="h6" fontWeight={700}>Attendance Overview</Typography>
-                  </Box>
-                  <Chip icon={<TimelineRoundedIcon />} label={`Last 7 ${kpi?.unit || "days"}`} size="small" color="info" variant="outlined" />
-                </Stack>
-                <Stack direction="row" alignItems="flex-end" spacing={1} sx={{ mt: 2 }}>
-                  {loading ? <Skeleton variant="rounded" width="100%" height={72} /> : bars}
-                </Stack>
-                <Divider sx={{ my: 2 }} />
-                <Grid container spacing={1.2}>
-                  {[{ label: "Present", val: kpi?.presentPct ?? 0, color: "success" }, { label: "Half‑Day", val: kpi?.halfDays ?? 0, color: "warning" }, { label: "Pending", val: kpi?.pending ?? 0, color: "info" }].map((s) => (
-                    <Grid item xs={4} key={s.label}>
-                      <Box sx={(t) => ({ p: 1.2, textAlign: "center", borderRadius: 1.5, bgcolor: alpha((t.palette as any)[s.color].main, t.palette.mode === "light" ? 0.08 : 0.18), color: (t.palette as any)[s.color].main, border: "1px solid", borderColor: alpha((t.palette as any)[s.color].main, 0.25) })}>
-                        <Typography variant="h6" fontWeight={800} lineHeight={1}>{s.val}{s.label === "Present" ? "%" : ""}</Typography>
-                        <Typography variant="caption" sx={{ opacity: 0.9 }}>{s.label}</Typography>
-                      </Box>
+        <Stack spacing={6}>
+          {/* Main Content Grid */}
+          <Grid container spacing={6}>
+            <Grid item xs={12} lg={8}>
+              <AttendanceCalendar />
+            </Grid>
+            <Grid item xs={12} lg={4}>
+              <QuickActions />
+            </Grid>
+          </Grid>
+
+          {/* Additional Dashboard Components */}
+          <Grid container spacing={6}>
+            <Grid item xs={12} md={6}>
+              <Card variant="outlined" sx={{ borderRadius: 3, overflow: "hidden" }}>
+                <CardContent sx={{ p: 3 }}>
+                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2 }}>Network Status</Typography>
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ mb: 3, flexWrap: "wrap" }}>
+                    <Chip
+                      icon={<WifiRoundedIcon />}
+                      label={wifiAllowed === null ? "Wi‑Fi —" : wifiAllowed ? "Wi‑Fi verified" : "Wi‑Fi not allowed"}
+                      color={wifiAllowed ? "success" : "warning"}
+                      variant="filled"
+                      sx={{ borderRadius: 2 }}
+                    />
+                    <Chip
+                      icon={<ErrorRoundedIcon />}
+                      label={geoAllowed === null ? "GPS —" : geoAllowed ? "Inside office geofence" : "Outside geofence"}
+                      color={geoAllowed ? "success" : "warning"}
+                      variant="filled"
+                      sx={{ borderRadius: 2 }}
+                    />
+                  </Stack>
+
+                  <Divider sx={{ my: 2 }} />
+
+                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2 }}>Quick Punch</Typography>
+                  <Stack direction="row" spacing={2} sx={{ mb: 3, flexWrap: "wrap" }}>
+                    <Button
+                      variant="contained"
+                      disabled={punchLoading || !wifiAllowed}
+                      onClick={() => doPunch("in")}
+                      sx={{ borderRadius: 2, flex: 1, minWidth: 120 }}
+                    >
+                      Punch In
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      disabled={punchLoading || !wifiAllowed}
+                      onClick={() => doPunch("out")}
+                      sx={{ borderRadius: 2, flex: 1, minWidth: 120 }}
+                    >
+                      Punch Out
+                    </Button>
+                  </Stack>
+
+                  <Divider sx={{ my: 2 }} />
+
+                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2 }}>Recent Activity</Typography>
+                  <Stack spacing={1.5}>
+                    {(loading ? Array.from({ length: 3 }) : events.slice(0, 4)).map((e: any, i: number) => (
+                      <Stack key={i} direction="row" justifyContent="space-between" alignItems="center">
+                        {loading ? <Skeleton width={160} height={20} /> : <Typography variant="body2">{e.date}</Typography>}
+                        {loading ? <Skeleton width={60} height={24} /> : <Chip size="small" color={e.kind === "in" ? "success" : "default"} label={e.kind.toUpperCase()} />}
+                      </Stack>
+                    ))}
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Card variant="outlined" sx={{ borderRadius: 3, overflow: "hidden" }}>
+                <CardContent sx={{ p: 3 }}>
+                  <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} sx={{ mb: 3 }}>
+                    <Typography variant="h6" fontWeight={700}>Quick Forms</Typography>
+                    <Chip label="Instant submission" size="small" color="info" variant="outlined" />
+                  </Stack>
+
+                  <Stack spacing={3}>
+                    {/* Leave Form */}
+                    <LeaveForm onSubmit={applyLeave} />
+
+                    {/* Regularization Form */}
+                    <RegularizationForm onSubmit={submitReg} />
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+
+          {/* Recent Requests Section */}
+          <Card variant="outlined" sx={{ borderRadius: 3, overflow: "hidden" }}>
+            <CardContent sx={{ p: 3 }}>
+              <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} sx={{ mb: 3 }}>
+                <Typography variant="h6" fontWeight={700}>My Recent Requests</Typography>
+                <Chip
+                  label="Auto half‑day after >2 disconnects/day"
+                  size="small"
+                  color="warning"
+                  variant="outlined"
+                  icon={<ErrorRoundedIcon />}
+                  sx={{ borderRadius: 2 }}
+                />
+              </Stack>
+
+              {loading ? (
+                <Grid container spacing={5}>
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Grid item xs={12} sm={6} md={3} key={i}>
+                      <Skeleton variant="rounded" height={120} sx={{ borderRadius: 2 }} />
                     </Grid>
                   ))}
                 </Grid>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} md={5}>
-            <Card variant="outlined">
-              <CardContent>
-                <Typography variant="subtitle2" color="text.secondary">Presence</Typography>
-                <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}>
-                  <Chip icon={<WifiRoundedIcon />} label={wifiAllowed === null ? "Wi‑Fi —" : wifiAllowed ? "Wi‑Fi verified" : "Wi‑Fi not allowed"} color={wifiAllowed ? "success" : "warning"} variant="filled" />
-                </Stack>
-                <Divider sx={{ my: 2 }} />
-                <Typography variant="subtitle2" color="text.secondary">Quick actions</Typography>
-                <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}>
-                  <Button variant="contained" disabled={punchLoading || !wifiAllowed} onClick={() => doPunch("in")}>Punch In</Button>
-                  <Button variant="outlined" disabled={punchLoading || !wifiAllowed} onClick={() => doPunch("out")}>Punch Out</Button>
-                </Stack>
-                <Divider sx={{ my: 2 }} />
-                <Typography variant="subtitle2" color="text.secondary">Quick history</Typography>
-                <Stack spacing={1} sx={{ mt: 1 }}>
-                  {(loading ? Array.from({ length: 3 }) : events.slice(0, 5)).map((e: any, i: number) => (
-                    <Stack key={i} direction="row" justifyContent="space-between" alignItems="center">
-                      {loading ? <Skeleton width={160} /> : <Typography>{e.date}</Typography>}
-                      {loading ? <Skeleton width={60} /> : <Chip size="small" color={e.kind === "in" ? "success" : "default"} label={e.kind.toUpperCase()} />}
-                    </Stack>
+              ) : (
+                <Grid container spacing={5}>
+                  {recent.map((r) => (
+                    <Grid item xs={12} sm={6} md={3} key={r.id}>
+                      <Card variant="outlined" sx={{ borderRadius: 2, transition: "all 0.2s", "&:hover": { transform: "translateY(-2px)", boxShadow: 2 } }}>
+                        <CardContent sx={{ p: 2.5 }}>
+                          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                            <Chip size="small" color={r.kind === "leave" ? "info" : "secondary"} label={r.kind} />
+                            <Chip
+                              size="small"
+                              color={r.status === "approved" ? "success" : r.status === "pending" ? "warning" : "default"}
+                              label={r.status}
+                            />
+                          </Stack>
+                          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>{r.label}</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {r.date_from}{r.date_to ? ` → ${r.date_to}` : ""}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
                   ))}
-                </Stack>
-              </CardContent>
+                </Grid>
+              )}
+            </CardContent>
+          </Card>
+        </Stack>
+
+        {(geoAllowed === false || wifiAllowed === false) && (
+          <Box sx={{ position: 'fixed', inset: 0, zIndex: 2000, bgcolor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Card variant="outlined" sx={{ p: 4, maxWidth: 520 }}>
+              <Typography variant="h5" fontWeight={800} sx={{ mb: 1 }}>Access Restricted</Typography>
+              <Typography variant="body1" sx={{ mb: 2 }}>{geoMsg || 'Come to office lazy fellow!!!'}</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Ensure you are inside the 1 km office geofence and connected via approved office network.
+              </Typography>
             </Card>
-          </Grid>
-
-          <Grid item xs={12}>
-            <LeaveForm onSubmit={applyLeave} />
-          </Grid>
-
-          <Grid item xs={12}>
-            <RegularizationForm onSubmit={submitReg} />
-          </Grid>
-
-          <Grid item xs={12}>
-            <Card variant="outlined">
-              <CardContent>
-                <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }}>
-                  <Typography variant="h6" fontWeight={700}>My recent requests</Typography>
-                  <Chip label="Auto half‑day after >2 disconnects/day" size="small" color="warning" variant="outlined" icon={<ErrorRoundedIcon />} />
-                </Stack>
-                <Divider sx={{ my: 2 }} />
-                {loading ? <Skeleton variant="rounded" height={140} /> : (
-                  <Grid container spacing={2}>
-                    {recent.map((r) => (
-                      <Grid item xs={12} sm={6} md={3} key={r.id}>
-                        <Card variant="outlined">
-                          <CardContent>
-                            <Stack direction="row" justifyContent="space-between" alignItems="center">
-                              <Chip size="small" color={r.kind === "leave" ? "info" : "secondary"} label={r.kind} />
-                              <Chip size="small" color={r.status === "approved" ? "success" : r.status === "pending" ? "warning" : "default"} label={r.status} />
-                            </Stack>
-                            <Typography variant="subtitle2" sx={{ mt: 1 }}>{r.label}</Typography>
-                            <Typography variant="caption" color="text.secondary">{r.date_from}{r.date_to ? ` → ${r.date_to}` : ""}</Typography>
-                          </CardContent>
-                        </Card>
-                      </Grid>
-                    ))}
-                  </Grid>
-                )}
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
+          </Box>
+        )}
 
         <Snackbar open={toast.open} autoHideDuration={2500} onClose={() => setToast({ ...toast, open: false })}>
           <Alert severity={toast.sev} onClose={() => setToast({ ...toast, open: false })}>{toast.msg}</Alert>
         </Snackbar>
       </Container>
+      </Box>
     </ThemeProvider>
   );
 }

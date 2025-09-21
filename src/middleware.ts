@@ -6,6 +6,10 @@ export default function middleware(req: NextRequest) {
   const url = req.nextUrl;
   const path = url.pathname;
   if (path === "/dashboard") {
+    const enabled = String(process.env.HR_REDIRECT_ENABLED || "true").toLowerCase() === "true";
+    if (!enabled) {
+      return NextResponse.next();
+    }
     const ip = getIpFromHeaders(req);
     const hrSingle = (process.env.HR_IP || "").trim();
     const hrList = (process.env.HR_IPS || "")

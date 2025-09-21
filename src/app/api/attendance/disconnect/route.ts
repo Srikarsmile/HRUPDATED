@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { supabaseServer as supabase } from "@/lib/supabaseServer";
 import { requireAuth } from "@/lib/auth";
 import { applyHalfDayIfNeeded } from "@/lib/policy";
+import { strict as rateStrict } from "@/lib/rate";
+import { captureError } from "@/lib/monitoring";
 
 export async function POST() {
   try {
+    await rateStrict("attendance:disconnect:post");
     const { userId } = await requireAuth();
     const now = new Date();
     const dayISO = now.toISOString().slice(0, 10);
@@ -44,6 +47,7 @@ export async function POST() {
       return NextResponse.json({ ok: true, record: data });
     }
   } catch (e: any) {
+    captureError(e, { route: 'attendance/disconnect:post' });
     if (e instanceof Response) return e;
     return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
   }

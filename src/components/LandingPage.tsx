@@ -25,9 +25,10 @@ import {
   ToggleButtonGroup,
   SxProps,
 } from "@mui/material";
-import { ThemeProvider, createTheme, alpha, Theme } from "@mui/material/styles";
+import { ThemeProvider, createTheme, alpha } from "@mui/material/styles";
+import type { Theme } from "@mui/material/styles";
 import GlobalStyles from "@mui/material/GlobalStyles";
-import Grid from "@mui/material/GridLegacy"; // MUI v7 legacy Grid (xs/md props)
+import Grid from "@mui/material/GridLegacy"; // Use legacy Grid and mark children with `item`
 import MenuIcon from "@mui/icons-material/Menu";
 import WifiRoundedIcon from "@mui/icons-material/WifiRounded";
 import SecurityRoundedIcon from "@mui/icons-material/SecurityRounded";
@@ -106,9 +107,10 @@ const Section = ({ id, children, sx }: SectionProps) => (
   </Box>
 );
 
-const MotionBox = motion(Box);
+// framer-motion v12: prefer motion.create over deprecated motion(Component)
+const MotionBox = motion.create(Box);
 
-// Reusable Card style
+// Reusable Card style (simple & professional)
 const cardBase = {
   height: "100%",
   display: "flex",
@@ -116,17 +118,25 @@ const cardBase = {
   border: "1px solid",
   borderColor: "divider",
   boxShadow: 0,
-  transition: "transform .2s ease, box-shadow .2s ease, border-color .2s ease",
-  "&:hover": { transform: "translateY(-4px)", boxShadow: 6, borderColor: "secondary.light" },
+  transition: "box-shadow .2s ease, border-color .2s ease",
+  "&:hover": { boxShadow: 3 },
 } as const;
 
-type FeatureCardProps = { icon: React.ReactNode; title: string; desc: string };
-const FeatureCard = ({ icon, title, desc }: FeatureCardProps) => (
-  <Card variant="outlined" sx={cardBase}>
-    <CardContent sx={{ display: "flex", gap: 1, flexDirection: "column" }}>
-      <Box sx={{ fontSize: 0 }}>{icon}</Box>
-      <Typography variant="h6">{title}</Typography>
-      <Typography color="text.secondary">{desc}</Typography>
+type FeatureCardProps = { icon: React.ReactNode; title: string; desc: string; delay?: number; theme: Theme };
+const FeatureCard = ({ icon, title, desc, delay = 0, theme }: FeatureCardProps) => (
+  <Card variant="outlined" sx={{ ...cardBase }}>
+    <CardContent sx={{ display: "flex", gap: 2, flexDirection: "column", p: 3 }}>
+      <Box sx={{ fontSize: 0, p: 1.5, borderRadius: 2, bgcolor: theme.palette.action.hover, width: "fit-content" }}>
+        {icon}
+      </Box>
+      <Box>
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
+          {title}
+        </Typography>
+        <Typography color="text.secondary" sx={{ lineHeight: 1.7, fontSize: "0.9rem" }}>
+          {desc}
+        </Typography>
+      </Box>
     </CardContent>
   </Card>
 );
@@ -145,54 +155,113 @@ function AttendanceCard({
 }) {
   const label = range === "today" ? "Today" : range === "week" ? "This Week" : "This Month";
 
+  // Donut config
+  const size = 156;
+  const thickness = 12;
+  const radius = size / 2 - thickness / 2;
+  const C = 2 * Math.PI * radius;
+  const segments = [
+    { label: "Present", value: stats.present, color: theme.palette.success.main },
+    { label: "Half‑Day", value: stats.half, color: theme.palette.warning.main },
+    { label: "Absent", value: stats.absent, color: theme.palette.error.main },
+  ];
+
+  // Normalize sparkline heights 0..1 with a gentle floor for flatter charts
+  const normalize = (vals: number[]) => {
+    const min = Math.min(...vals, 60);
+    const max = Math.max(...vals, 100);
+    const span = Math.max(1, max - min);
+    return vals.map((v) => (v - min) / span);
+  };
+  const spark = normalize(stats.bars);
+
+  let offset = 0; // cumulative percent offset for donut segments
+
   return (
-    <Card variant="outlined" sx={{ ...cardBase, p: 2, borderRadius: 0 }}>
+    <Card variant="outlined" sx={{ ...cardBase, p: 2.5 }}>
       <Stack spacing={2}>
-        <Box>
+        <Stack direction="row" alignItems="baseline" justifyContent="space-between">
           <Typography variant="subtitle2" color="text.secondary">{label}</Typography>
-          <Typography variant="h5" fontWeight={700}>Attendance</Typography>
-        </Box>
-
-        {/* Primary KPI */}
-        <Box sx={{ display: "grid", placeItems: "center", my: 1 }}>
-          <Box sx={{ position: "relative", display: "inline-flex" }}>
-            <CircularProgress variant="determinate" value={stats.present} size={140} thickness={4} color="success" />
-            <Box
-              sx={{
-                position: "absolute",
-                inset: 0,
-                display: "grid",
-                placeItems: "center",
-                textAlign: "center",
-              }}
-            >
-              <Typography variant="h4" fontWeight={800} lineHeight={1}>{stats.present}%</Typography>
-              <Typography variant="caption" color="text.secondary">Present</Typography>
-            </Box>
-          </Box>
-        </Box>
-
-        {/* Compact distribution bar */}
-        <Box sx={{ display: "flex", height: 10, borderRadius: 0, overflow: "hidden", border: "1px solid", borderColor: "divider", bgcolor: "action.hover" }}>
-          <Box sx={{ width: `${stats.present}%`, bgcolor: alpha(theme.palette.success.main, 0.9) }} />
-          <Box sx={{ width: `${stats.half}%`, bgcolor: alpha(theme.palette.warning.main, 0.9) }} />
-          <Box sx={{ width: `${stats.absent}%`, bgcolor: alpha(theme.palette.error.main, 0.9) }} />
-        </Box>
-
-        {/* Breakdown */}
-        <Stack spacing={1}>
-          {[{ label: "Present", value: stats.present, color: "success" as const }, { label: "Half‑Day", value: stats.half, color: "warning" as const }, { label: "Absent", value: stats.absent, color: "error" as const }].map(
-            (s) => (
-              <Box key={s.label}>
-                <Stack direction="row" justifyContent="space-between" sx={{ alignItems: "center", gap: 1 }}>
-                  <Typography variant="body2" color="text.secondary">{s.label}</Typography>
-                  <Typography variant="body2" fontWeight={700}>{s.value}%</Typography>
-                </Stack>
-                <LinearProgress variant="determinate" value={s.value} color={s.color} sx={{ mt: 0.5, height: 8, borderRadius: 0, bgcolor: "action.hover", "& .MuiLinearProgress-bar": { borderRadius: 0 } }} />
-              </Box>
-            )
-          )}
+          <Chip size="small" label={`${stats.present}% present`} sx={{ fontWeight: 700, bgcolor: alpha(theme.palette.success.main, theme.palette.mode === "light" ? 0.08 : 0.15), color: theme.palette.success.main }} />
         </Stack>
+
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} sm={6}>
+            <Box sx={{ position: "relative", width: size, height: size, mx: "auto" }}>
+              {/* Track */}
+              <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ position: "absolute", inset: 0 }}>
+                <circle cx={size / 2} cy={size / 2} r={radius} stroke={theme.palette.action.hover} strokeWidth={thickness} fill="none"/>
+              </svg>
+              {/* Segments */}
+              {segments.map((s, idx) => {
+                const len = (s.value / 100) * C;
+                const dash = `${len} ${C}`;
+                const start = (offset / 100) * C;
+                offset += s.value;
+                return (
+                  <svg key={s.label} width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ position: "absolute", inset: 0 }}>
+                    <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
+                      <circle
+                        cx={size / 2}
+                        cy={size / 2}
+                        r={radius}
+                        stroke={s.color}
+                        strokeWidth={thickness}
+                        strokeLinecap="round"
+                        strokeDasharray={dash}
+                        strokeDashoffset={C - start}
+                        fill="none"
+                        opacity={0.95}
+                      />
+                    </g>
+                  </svg>
+                );
+              })}
+              {/* Center label */}
+              <Box sx={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", textAlign: "center" }}>
+                <Typography variant="h4" fontWeight={800} lineHeight={1}>{stats.present}%</Typography>
+                <Typography variant="caption" color="text.secondary">Present</Typography>
+              </Box>
+            </Box>
+          </Grid>
+
+          <Grid item xs={12} sm={6}>
+            <Stack spacing={1.25} sx={{ px: { xs: 0, sm: 1 } }}>
+              {segments.map((s) => (
+                <Box key={s.label}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Box sx={{ width: 10, height: 10, borderRadius: 999, bgcolor: s.color }} />
+                      <Typography variant="body2" color="text.secondary">{s.label}</Typography>
+                    </Stack>
+                    <Typography variant="body2" fontWeight={700}>{s.value}%</Typography>
+                  </Stack>
+                  <LinearProgress
+                    variant="determinate"
+                    value={s.value}
+                    sx={{
+                      mt: 0.5,
+                      height: 8,
+                      borderRadius: 6,
+                      bgcolor: theme.palette.action.hover,
+                      '& .MuiLinearProgress-bar': { backgroundColor: s.color, borderRadius: 6 },
+                    }}
+                  />
+                </Box>
+              ))}
+            </Stack>
+          </Grid>
+        </Grid>
+
+        {/* Sparkline */}
+        <Box sx={{ mt: 0.5 }}>
+          <Typography variant="caption" color="text.secondary">Trend (last 7 {stats.unit})</Typography>
+          <Stack direction="row" spacing={0.5} sx={{ mt: 0.75, alignItems: "flex-end" }}>
+            {spark.map((h, i) => (
+              <Box key={i} sx={{ width: 10, height: Math.max(6, 36 * h), borderRadius: 1, bgcolor: alpha(theme.palette.primary.main, 0.25), border: `1px solid ${alpha(theme.palette.primary.main, 0.35)}` }} />
+            ))}
+          </Stack>
+        </Box>
       </Stack>
     </Card>
   );
@@ -291,35 +360,18 @@ export default function LandingPage() {
 
       {/* Hero */}
       <Box
-        sx={{
-          position: "relative",
-          overflow: "hidden",
-          background:
-            theme.palette.mode === "light"
-              ? "radial-gradient(1200px 600px at -10% -10%, #c7d2fe22 0%, transparent 60%), radial-gradient(900px 500px at 110% 10%, #e9d5ff22 0%, transparent 60%), linear-gradient(135deg, #fafaff 0%, #ffffff 60%)"
-              : "radial-gradient(1200px 600px at -10% -10%, #312e8122 0%, transparent 60%), radial-gradient(900px 500px at 110% 10%, #4c1d9522 0%, transparent 60%), linear-gradient(135deg, #0b1020 0%, #0f172a 60%)",
-        }}
+        sx={{ position: "relative", overflow: "hidden", background: theme.palette.background.default }}
       >
         <Container sx={{ py: { xs: 10, md: 16 } }}>
           <Grid container spacing={6} alignItems="center">
-            <Grid xs={12} md={6}>
+            <Grid item xs={12} md={6}>
               <MotionBox initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
                 <Stack spacing={2} sx={{ maxWidth: 620 }}>
                   <Chip label="PulseHR 2.0" color="secondary" variant="outlined" sx={{ alignSelf: "flex-start", fontWeight: 700 }} />
                   <Typography
                     variant="h2"
                     component="h1"
-                    sx={{
-                      lineHeight: 1.1,
-                      fontWeight: 800,
-                      backgroundImage:
-                        theme.palette.mode === "light"
-                          ? "linear-gradient(90deg,#111827 10%,#4f46e5 60%,#a855f7 100%)"
-                          : "linear-gradient(90deg,#e5e7eb 10%,#93c5fd 60%,#d8b4fe 100%)",
-                      WebkitBackgroundClip: "text",
-                      backgroundClip: "text",
-                      color: "transparent",
-                    }}
+                    sx={{ lineHeight: 1.1, fontWeight: 800 }}
                     gutterBottom
                   >
                     Attendance that just works
@@ -340,7 +392,7 @@ export default function LandingPage() {
               </MotionBox>
             </Grid>
 
-            <Grid xs={12} md={6}>
+            <Grid item xs={12} md={6}>
               <MotionBox
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -369,11 +421,11 @@ export default function LandingPage() {
 
                   {/* HERO CONTENT */}
                   <Grid container spacing={2} sx={{ mt: 1 }}>
-                    <Grid xs={12} md={7}>
+                    <Grid item xs={12} md={7}>
                       <AttendanceCard theme={theme} range={range} stats={stats} />
                     </Grid>
 
-                    <Grid xs={12} md={5}>
+                    <Grid item xs={12} md={5}>
                       <Card variant="outlined" sx={{ ...cardBase, p: 2 }}>
                         <Typography variant="subtitle2" color="text.secondary">Quick status</Typography>
                         <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}>
@@ -416,17 +468,17 @@ export default function LandingPage() {
             <Typography variant="overline" color="secondary">Core features</Typography>
             <Typography variant="h3" sx={{ mb: 2 }}>Built for HR accuracy & speed</Typography>
             <Typography color="text.secondary" sx={{ mb: 4, maxWidth: 720 }}>
-              Attendance via Wi‑Fi / GPS / manual punch, intelligent half‑day auto‑marking, leave & regularization workflows, and a live dashboard.
+              Track attendance via Wi‑Fi, GPS, or manual punch with intelligent half‑day auto‑marking, leave and regularization workflows, and a live dashboard.
             </Typography>
-            <Grid container spacing={3} alignItems="stretch">
+            <Grid container spacing={5} alignItems="stretch">
               {[
-                { icon: <WifiRoundedIcon color="secondary" fontSize="large" />, title: "Wi‑Fi‑Locked Login", desc: "Authenticate only on office networks for true presence verification." },
-                { icon: <TimelineRoundedIcon color="secondary" fontSize="large" />, title: "Smart Half‑Day Logic", desc: "Auto‑flag half‑days after >2 disconnects/day with audit trail." },
-                { icon: <SecurityRoundedIcon color="secondary" fontSize="large" />, title: "Role‑Based Access", desc: "Separate Employee vs HR/Admin permissions with controls." },
-                { icon: <SpeedRoundedIcon color="secondary" fontSize="large" />, title: "Realtime Alerts", desc: "Missed punches, disconnects, and approvals via notifications." },
-              ].map((f) => (
-                <Grid key={f.title} xs={12} sm={6} md={3}>
-                  <FeatureCard icon={f.icon} title={f.title} desc={f.desc} />
+                { icon: <WifiRoundedIcon color="secondary" fontSize="large" />, title: "Wi‑Fi‑Locked Login", desc: "Authenticate only on office networks for verified presence." },
+                { icon: <TimelineRoundedIcon color="secondary" fontSize="large" />, title: "Smart Half‑Day Logic", desc: "Auto‑flag half‑days after more than two disconnects in a day with a full audit trail." },
+                { icon: <SecurityRoundedIcon color="secondary" fontSize="large" />, title: "Role‑Based Access", desc: "Separate employee and HR/Admin permissions with granular controls." },
+                { icon: <SpeedRoundedIcon color="secondary" fontSize="large" />, title: "Real‑Time Alerts", desc: "Receive notifications for missed punches, disconnects, and approvals." },
+              ].map((f, index) => (
+                <Grid item key={f.title} xs={12} sm={6} md={3}>
+                  <FeatureCard icon={f.icon} title={f.title} desc={f.desc} delay={index} theme={theme} />
                 </Grid>
               ))}
             </Grid>
@@ -441,21 +493,93 @@ export default function LandingPage() {
             <MotionBox initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}>
               <Typography variant="overline" color="secondary">Workflow</Typography>
               <Typography variant="h3" sx={{ mb: 2 }}>How it works</Typography>
-              <Grid container spacing={3} alignItems="stretch">
+              <Grid container spacing={5} alignItems="stretch">
                 {[
                   { step: "01", title: "Connect & Verify", text: "User connects to office Wi‑Fi; network signature verifies presence." },
                   { step: "02", title: "Punch & Track", text: "Employee punches via Wi‑Fi/GPS/manual; realtime status updates dashboard." },
                   { step: "03", title: "Auto‑Policies", text: ">2 disconnects triggers half‑day; exceptions handled via regularization." },
                   { step: "04", title: "Approve & Report", text: "HR reviews requests, exports reports, and monitors KPIs." },
-                ].map((s) => (
-                  <Grid key={s.step} xs={12} md={3}>
-                    <Card variant="outlined" sx={{ ...cardBase }}>
-                      <CardContent>
-                        <Typography variant="overline" color="secondary">{s.step}</Typography>
-                        <Typography variant="h6" sx={{ mb: 1 }}>{s.title}</Typography>
-                        <Typography color="text.secondary">{s.text}</Typography>
-                      </CardContent>
-                    </Card>
+                ].map((s, index) => (
+                  <Grid item key={s.step} xs={12} md={3}>
+                    <MotionBox
+                      initial={{ opacity: 0, y: 30 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={{
+                        duration: 0.6,
+                        delay: index * 0.15,
+                        type: "spring",
+                        stiffness: 300,
+                        damping: 20
+                      }}
+                      whileHover={{
+                        y: -8,
+                        transition: { duration: 0.2 }
+                      }}
+                    >
+                      <Card
+                        variant="outlined"
+                        sx={{
+                          ...cardBase,
+                          background: theme.palette.mode === "light"
+                            ? "linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.95) 100%)"
+                            : "linear-gradient(135deg, rgba(15,23,42,0.95) 0%, rgba(30,41,59,0.95) 100%)",
+                          backdropFilter: "blur(16px)",
+                          border: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
+                          position: "relative",
+                          overflow: "hidden",
+                          "&:hover": {
+                            borderColor: theme.palette.primary.main,
+                            boxShadow: `0 16px 32px -8px ${alpha(theme.palette.primary.main, 0.25)}`,
+                          }
+                        }}
+                      >
+                        <CardContent sx={{ p: 3 }}>
+                          <Box
+                            sx={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              width: 48,
+                              height: 48,
+                              borderRadius: "50%",
+                              background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+                              color: "white",
+                              fontWeight: 800,
+                              fontSize: "1.25rem",
+                              mb: 2,
+                              boxShadow: `0 8px 16px -4px ${alpha(theme.palette.primary.main, 0.4)}`,
+                            }}
+                          >
+                            {s.step}
+                          </Box>
+                          <Typography
+                            variant="h6"
+                            sx={{
+                              mb: 1,
+                              fontWeight: 700,
+                              background: theme.palette.mode === "light"
+                                ? "linear-gradient(135deg, #1f2937 0%, #4f46e5 100%)"
+                                : "linear-gradient(135deg, #e5e7eb 0%, #93c5fd 100%)",
+                              WebkitBackgroundClip: "text",
+                              backgroundClip: "text",
+                              color: "transparent",
+                            }}
+                          >
+                            {s.title}
+                          </Typography>
+                          <Typography
+                            color="text.secondary"
+                            sx={{
+                              lineHeight: 1.6,
+                              fontSize: "0.875rem"
+                            }}
+                          >
+                            {s.text}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </MotionBox>
                   </Grid>
                 ))}
               </Grid>
@@ -472,7 +596,7 @@ export default function LandingPage() {
             <Typography variant="h3" sx={{ mb: 3 }}>Built with modern web tech</Typography>
             <Grid container spacing={2}>
               {["React", "TypeScript", "Material‑UI", "PWA", "Node.js", "Express", "JWT", "WebSockets", "PostgreSQL", "Redis"].map((t) => (
-                <Grid key={t}>
+                <Grid item key={t}>
                   <Chip label={t} variant="outlined" color="primary" sx={{ fontWeight: 600 }} />
                 </Grid>
               ))}
@@ -486,9 +610,9 @@ export default function LandingPage() {
         <Container>
           <Section id="cta">
             <MotionBox initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}>
-              <Grid container spacing={4} alignItems="stretch">
+              <Grid container spacing={5} alignItems="stretch">
                 {/* Left: big pitch + primary actions */}
-                <Grid xs={12} md={7}>
+                <Grid item xs={12} md={7}>
                   <Card variant="outlined" sx={{ ...cardBase, p: { xs: 2, md: 3 } }}>
                     <CardContent sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                       <Typography variant="overline" color="secondary">Get started</Typography>
@@ -497,15 +621,31 @@ export default function LandingPage() {
                         Ship a pilot in days. Add your domain, Wi‑Fi signatures, and policies — and go live.
                       </Typography>
                       <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ mt: 1 }}>
-                        <Button size="large" variant="contained" endIcon={<ArrowForwardRoundedIcon />} component={Link} href="/dashboard">Start free pilot</Button>
-                        <Button size="large" variant="outlined" component={Link} href="/dashboard">Go to Dashboard</Button>
+                        {/* Use MUI v7 LinkComponent integration with Next.js */}
+                        <Button
+                          size="large"
+                          variant="contained"
+                          endIcon={<ArrowForwardRoundedIcon />}
+                          LinkComponent={Link}
+                          href="/dashboard"
+                        >
+                          Start free pilot
+                        </Button>
+                        <Button
+                          size="large"
+                          variant="outlined"
+                          LinkComponent={Link}
+                          href="/dashboard"
+                        >
+                          Go to Dashboard
+                        </Button>
                       </Stack>
                     </CardContent>
                   </Card>
                 </Grid>
 
                 {/* Right: sandbox benefits + access */}
-                <Grid xs={12} md={5}>
+                <Grid item xs={12} md={5}>
                   <Card variant="outlined" sx={{ ...cardBase }}>
                     <CardContent>
                       <Typography variant="overline" color="secondary">Get a sandbox</Typography>
@@ -542,14 +682,14 @@ export default function LandingPage() {
         <Box component="footer" sx={{ py: 6 }}>
           <Divider sx={{ mb: 3 }} />
           <Grid container spacing={2} alignItems="center" justifyContent="space-between">
-            <Grid>
+            <Grid item>
               <Stack direction="row" spacing={1} alignItems="center">
                 <WifiRoundedIcon color="secondary" />
                 <Typography fontWeight={800} color="primary">PulseHR</Typography>
                 <Typography color="text.secondary">© {new Date().getFullYear()}</Typography>
               </Stack>
             </Grid>
-            <Grid>
+            <Grid item>
               <Stack direction="row" spacing={1}>
                 <IconButton><GitHubIcon /></IconButton>
                 <IconButton><TwitterIcon /></IconButton>
