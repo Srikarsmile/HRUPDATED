@@ -13,9 +13,29 @@ export default function middleware(req: NextRequest) {
       .map((s) => s.trim())
       .filter(Boolean);
     const hrSet = new Set([hrSingle, ...hrList].filter(Boolean));
-    if (ip && hrSet.has(ip)) {
-      const to = new URL("/admin", req.url);
-      return NextResponse.redirect(to);
+
+    // Debug logging for development
+    console.log("[MIDDLEWARE DEBUG] Detected IP:", ip);
+    console.log("[MIDDLEWARE DEBUG] HR_IP:", hrSingle);
+    console.log("[MIDDLEWARE DEBUG] HR_IPS:", process.env.HR_IPS);
+    console.log("[MIDDLEWARE DEBUG] HR Set:", Array.from(hrSet));
+    console.log("[MIDDLEWARE DEBUG] IP in HR set:", hrSet.has(ip || ""));
+
+    // In development mode, make it easier to access admin dashboard
+    if (process.env.NODE_ENV === "development") {
+      // Allow access to admin dashboard if IP matches OR if accessing with ?admin=true
+      const isAdmin = hrSet.has(ip || "") || url.searchParams.get("admin") === "true";
+      if (isAdmin) {
+        console.log("[MIDDLEWARE DEBUG] Redirecting to admin dashboard");
+        const to = new URL("/admin/rt", req.url);
+        return NextResponse.redirect(to);
+      }
+    } else {
+      // Production: strict IP checking only
+      if (ip && hrSet.has(ip)) {
+        const to = new URL("/admin/rt", req.url);
+        return NextResponse.redirect(to);
+      }
     }
   }
   return NextResponse.next();

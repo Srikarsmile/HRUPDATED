@@ -1,7 +1,5 @@
 "use client";
 import React from "react";
-import Link from "next/link";
-// Clerk removed – IP-based auth now
 import {
   Container,
   Box,
@@ -12,346 +10,460 @@ import {
   Stack,
   Chip,
   Divider,
-  LinearProgress,
-  IconButton,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
   Button,
+  Tabs,
+  Tab,
+  TextField,
+  MenuItem,
+  Snackbar,
+  Alert,
+  Skeleton,
   ToggleButton,
   ToggleButtonGroup,
-  CssBaseline,
-  CircularProgress,
-  Alert,
+  Switch,
+  FormControlLabel,
 } from "@mui/material";
-import { ThemeProvider, createTheme } from "@mui/material/styles";
-import { supabase } from "@/lib/supabase";
-import Brightness4Icon from "@mui/icons-material/Brightness4";
-import Brightness7Icon from "@mui/icons-material/Brightness7";
-import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
-import ReportRoundedIcon from "@mui/icons-material/ReportRounded";
+import { ThemeProvider, createTheme, alpha } from "@mui/material/styles";
+import TodayRoundedIcon from "@mui/icons-material/TodayRounded";
+import CalendarMonthRoundedIcon from "@mui/icons-material/CalendarMonthRounded";
+import AccessTimeRoundedIcon from "@mui/icons-material/AccessTimeRounded";
 import WifiRoundedIcon from "@mui/icons-material/WifiRounded";
 import TimelineRoundedIcon from "@mui/icons-material/TimelineRounded";
-import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
-import ShieldRoundedIcon from "@mui/icons-material/ShieldRounded";
+import ErrorRoundedIcon from "@mui/icons-material/ErrorRounded";
+import { supabase } from "@/lib/supabase";
 
 type Range = "today" | "week" | "month";
-type Summary = {
-  presentPct: number;
-  halfPct: number;
-  absentPct: number;
-  todayDisconnects: number;
-  pendingApprovals: number;
-  recent: number[];
-};
+type MyKPI = { presentPct: number; halfDays: number; pending: number; unit: string; recent: number[] };
+type MyEvent = { id: string; date: string; kind: "in" | "out"; method?: string };
+type MyRequest = { id: string; kind: "leave" | "regularization"; status: string; label: string; date_from?: string; date_to?: string };
+type EmployeeProfile = { user_id: string; name: string | null; email: string | null; department: string | null; employee_id: string | null; found: boolean };
 
-const getTheme = (mode: "light" | "dark") =>
-  createTheme({
-    palette: {
-      mode,
-      primary: { main: mode === "light" ? "#4f46e5" : "#c7d2fe" },
-      secondary: { main: mode === "light" ? "#0ea5e9" : "#7dd3fc" },
-      success: { main: "#10b981" },
-      warning: { main: "#f59e0b" },
-      error: { main: "#ef4444" },
-      background: { default: mode === "light" ? "#f6f7fb" : "#0b1020", paper: mode === "light" ? "#fff" : "#0f172a" },
-      divider: mode === "light" ? "#e7e7ef" : "#22304b",
-    },
-    shape: { borderRadius: 12 },
-    typography: { button: { textTransform: "none", fontWeight: 700 } },
-  });
+const theme = createTheme({
+  palette: {
+    mode: "light",
+    primary: { main: "#1f2937" },
+    secondary: { main: "#0ea5e9" },
+    success: { main: "#10b981" },
+    warning: { main: "#f59e0b" },
+    error: { main: "#ef4444" },
+    info: { main: "#3b82f6" },
+    /* Set white background */
+    background: { default: "#ffffff", paper: "#fff" },
+    divider: "#e7e7ef",
+  },
+  shape: { borderRadius: 12 },
+  typography: { button: { textTransform: "none", fontWeight: 700 } },
+});
 
-export default function DashboardPage() {
-  const [mode, setMode] = React.useState<"light" | "dark">("light");
+function MiniStat({ label, value, color }: { label: string; value: string; color: "primary" | "secondary" | "success" | "warning" | "error" | "info" }) {
+  return (
+    <Card variant="outlined">
+      <CardContent>
+        <Typography variant="overline" color={`${color}.main`}>{label}</Typography>
+        <Typography variant="h5" fontWeight={800}>{value}</Typography>
+      </CardContent>
+    </Card>
+  );
+}
+
+function LeaveForm({ onSubmit }: { onSubmit: (payload: any) => Promise<void> }) {
+  const [from, setFrom] = React.useState("");
+  const [to, setTo] = React.useState("");
+  const [note, setNote] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  return (
+    <Card variant="outlined">
+      <CardContent>
+        <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
+          <TextField label="From" type="date" size="small" value={from} onChange={(e) => setFrom(e.target.value)} sx={{ width: 180 }} InputLabelProps={{ shrink: true }} />
+          <TextField label="To" type="date" size="small" value={to} onChange={(e) => setTo(e.target.value)} sx={{ width: 180 }} InputLabelProps={{ shrink: true }} />
+          <TextField label="Reason (optional)" size="small" value={note} onChange={(e) => setNote(e.target.value)} sx={{ flex: 1 }} />
+          <Button variant="contained" disabled={saving} onClick={async () => { setSaving(true); await onSubmit({ start_date: from, end_date: to, reason: note }); setSaving(false); }}>Apply Leave</Button>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function RegularizationForm({ onSubmit }: { onSubmit: (payload: any) => Promise<void> }) {
+  const [date, setDate] = React.useState("");
+  const [reason, setReason] = React.useState("Missed punch");
+  const [note, setNote] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  return (
+    <Card variant="outlined">
+      <CardContent>
+        <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
+          <TextField label="Date" type="date" size="small" value={date} onChange={(e) => setDate(e.target.value)} sx={{ width: 180 }} InputLabelProps={{ shrink: true }} />
+          <TextField label="Reason" select size="small" value={reason} onChange={(e) => setReason(e.target.value)} sx={{ width: 220 }}>
+            <MenuItem value="Missed punch">Missed punch</MenuItem>
+            <MenuItem value="Disconnect">Disconnect</MenuItem>
+            <MenuItem value="Other">Other</MenuItem>
+          </TextField>
+          <TextField label="Note (optional)" size="small" value={note} onChange={(e) => setNote(e.target.value)} sx={{ flex: 1 }} />
+          <Button variant="outlined" disabled={saving} onClick={async () => { setSaving(true); await onSubmit({ date, reason, kind: reason === "Disconnect" ? "disconnect" : "attendance", note }); setSaving(false); }}>Submit</Button>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+export default function EmployeeDashboard() {
   const [range, setRange] = React.useState<Range>("today");
-  const theme = React.useMemo(() => getTheme(mode), [mode]);
-
   const [loading, setLoading] = React.useState<boolean>(true);
   const [error, setError] = React.useState<string | null>(null);
-  const [summary, setSummary] = React.useState<Summary | null>(null);
-  const [approvals, setApprovals] = React.useState<{ id: string; employee: string; type: string; date: string; status: string }[]>([]);
-  const [disconnects] = React.useState<{ id: string; employee: string; count: number; date: string }[]>([]);
-  const [who, setWho] = React.useState<{ ip: string | null; role: string } | null>(null);
+  const [wifiAllowed, setWifiAllowed] = React.useState<boolean | null>(null);
 
-  React.useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        setLoading(true);
-        setError(null);
+  const [kpi, setKpi] = React.useState<MyKPI | null>(null);
+  const [events, setEvents] = React.useState<MyEvent[]>([]);
+  const [recent, setRecent] = React.useState<MyRequest[]>([]);
+  const [employee, setEmployee] = React.useState<EmployeeProfile | null>(null);
+  const [demoMode, setDemoMode] = React.useState<boolean>(false);
 
-        // KPIs
-        const kpiRes = await fetch("/api/kpis", { cache: "no-store" });
-        const kpi = await kpiRes.json();
-        const att = Number(kpi.attendancePercent || 0);
-        const pend = Number(kpi.pending || 0);
+  const [toast, setToast] = React.useState<{ open: boolean; msg: string; sev: "success" | "error" | "info" }>({ open: false, msg: "", sev: "success" });
+  const [punchLoading, setPunchLoading] = React.useState<boolean>(false);
 
-        // Build a flat 7-bar series using attendance percent
-        const recent = Array.from({ length: 7 }, () => att);
-
-        // Try to load pending approvals (if HR/Admin)
-        let appr: { id: string; employee: string; type: string; date: string; status: string }[] = [];
-        try {
-          const aRes = await fetch("/api/admin/requests", { cache: "no-store" });
-          if (aRes.ok) {
-            const a = await aRes.json();
-            const leaves = (a.leaves || []).map((l: any) => ({ id: String(l.id), employee: l.user_id, type: "Leave", date: l.start_date, status: l.status }));
-            const regs = (a.regularizations || []).map((r: any) => ({ id: String(r.id), employee: r.user_id, type: "Regularization", date: r.date, status: r.status }));
-            appr = [...leaves, ...regs];
-          }
-        } catch {}
-
-        if (!cancelled) {
-          setSummary({ presentPct: att, halfPct: 0, absentPct: Math.max(0, 100 - att), todayDisconnects: 0, pendingApprovals: pend, recent });
-          setApprovals(appr);
-          setLoading(false);
-        }
-      } catch (e: any) {
-        if (!cancelled) {
-          setError(e?.message || "Failed to load dashboard");
-          setLoading(false);
-        }
-      }
+  function computeRangeStrings(r: Range) {
+    const now = new Date();
+    if (r === "today") {
+      const d = now.toISOString().slice(0, 10);
+      return { from: d, to: d };
     }
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [range]);
+    if (r === "week") {
+      const day = now.getDay();
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - ((day + 6) % 7));
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      return { from: monday.toISOString().slice(0, 10), to: sunday.toISOString().slice(0, 10) };
+    }
+    const first = new Date(now.getFullYear(), now.getMonth(), 1);
+    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return { from: first.toISOString().slice(0, 10), to: last.toISOString().slice(0, 10) };
+  }
 
-  // Who am I (IP + role)
-  React.useEffect(() => {
-    (async () => {
+  async function loadAll() {
+    try {
+      setLoading(true);
+      setError(null);
+
+      if (demoMode) {
+        // Load demo data
+        const demoRes = await fetch("/api/demo/employee", { cache: "no-store" });
+        const demoData = await demoRes.json();
+
+        if (!demoRes.ok) throw new Error(demoData.error || "Failed to load demo data");
+
+        setEmployee(demoData.profile);
+        setWifiAllowed(demoData.networkStatus.allowed);
+
+        const presentPct = Number(demoData.kpis.attendancePercent || 0);
+        const halfPct = Number(demoData.kpis.halfPct || 0);
+        const recentBars = Array.from({ length: 7 }, () => presentPct);
+        setKpi({ presentPct, halfDays: Math.round(halfPct), pending: Number(demoData.kpis.pending || 0), unit: range === "month" ? "weeks" : "days", recent: recentBars });
+
+        // Recent requests
+        const reqs: MyRequest[] = [
+          ...(demoData.leaveRequests.items || []).map((x: any) => ({ id: String(x.id), kind: "leave" as const, status: x.status, label: `${x.start_date} → ${x.end_date}`, date_from: x.start_date, date_to: x.end_date })),
+          ...(demoData.regularizations.items || []).map((x: any) => ({ id: String(x.id), kind: "regularization" as const, status: x.status, label: x.reason, date_from: x.date })),
+        ].slice(0, 8);
+        setRecent(reqs);
+
+        // Demo attendance events
+        const evs: MyEvent[] = (demoData.attendanceEvents || []).map((row: any) => ({ id: String(row.id), date: new Date(row.at).toLocaleString(), kind: row.type, method: row.method }));
+        setEvents(evs);
+
+        setLoading(false);
+        return;
+      }
+
+      // Load real data
+      const [kpiRes, leaveRes, regRes, whoRes, profileRes] = await Promise.all([
+        fetch("/api/kpis", { cache: "no-store" }),
+        fetch("/api/leave", { cache: "no-store" }),
+        fetch("/api/regularizations", { cache: "no-store" }),
+        fetch("/api/whoami", { cache: "no-store" }),
+        fetch("/api/employee/profile", { cache: "no-store" }),
+      ]);
+      const k = await kpiRes.json();
+      const l = await leaveRes.json();
+      const r = await regRes.json();
+      const who = await whoRes.json();
+      const profile = await profileRes.json();
+
+      setEmployee(profile);
+
+      const presentPct = Number(k.attendancePercent || 0);
+      const halfPct = Number(k.halfPct || 0);
+      const recentBars = Array.from({ length: 7 }, () => presentPct);
+      setKpi({ presentPct, halfDays: Math.round(halfPct), pending: Number(k.pending || 0), unit: range === "month" ? "weeks" : "days", recent: recentBars });
+
+      // Recent requests (last 8)
+      const reqs: MyRequest[] = [
+        ...(l.items || []).map((x: any) => ({ id: String(x.id), kind: "leave" as const, status: x.status, label: `${x.start_date} → ${x.end_date}`, date_from: x.start_date, date_to: x.end_date })),
+        ...(r.items || []).map((x: any) => ({ id: String(x.id), kind: "regularization" as const, status: x.status, label: x.reason, date_from: x.date })),
+      ].slice(0, 8);
+      setRecent(reqs);
+
+      // Attendance punch logs (read-only from supabase anon)
+      const { from, to } = computeRangeStrings(range);
+      if (who?.userId && supabase) {
+        const { data } = await supabase
+          .from("attendance_logs")
+          .select("id,at,type,method")
+          .eq("user_id", who.userId)
+          .gte("at", new Date(from).toISOString())
+          .lte("at", new Date(new Date(to).getTime() + 24 * 3600 * 1000 - 1).toISOString())
+          .order("at", { ascending: false })
+          .limit(10);
+        const evs: MyEvent[] = (data || []).map((row: any) => ({ id: String(row.id), date: new Date(row.at).toLocaleString(), kind: row.type, method: row.method }));
+        setEvents(evs);
+      } else {
+        setEvents([]);
+      }
+
+      // Network status
       try {
-        const res = await fetch("/api/whoami", { cache: "no-store" });
-        if (res.ok) {
-          const data = await res.json();
-          setWho({ ip: data.ip || null, role: data.role || "employee" });
-        }
-      } catch {}
-    })();
-  }, []);
+        const nc = await fetch("/api/network/check", { cache: "no-store" }).then((r) => r.json());
+        setWifiAllowed(!!nc.allowed);
+      } catch {
+        setWifiAllowed(null);
+      }
 
-  // Log access
+      setLoading(false);
+    } catch (e: any) {
+      setError(e?.message || "Failed to load");
+      setLoading(false);
+    }
+  }
+
   React.useEffect(() => {
-    (async () => {
-      try {
-        await fetch("/api/log/access", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ path: "/dashboard" }),
-        });
-      } catch {}
-    })();
-  }, []);
+    loadAll();
 
-  // Supabase realtime: refresh on relevant table changes
-  React.useEffect(() => {
-    const channel = supabase
-      .channel("dashboard-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "attendance_days" },
-        () => setRange((r) => r)
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "leave_requests" },
-        () => setRange((r) => r)
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "regularizations" },
-        () => setRange((r) => r)
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "disconnect_events" },
-        () => setRange((r) => r)
-      )
-      .subscribe();
+    // Only set up real-time subscriptions if not in demo mode
+    if (!demoMode) {
+      const ch = supabase
+        .channel("emp-dashboard")
+        .on("postgres_changes", { event: "*", schema: "public", table: "attendance_days" }, () => loadAll())
+        .on("postgres_changes", { event: "*", schema: "public", table: "leave_requests" }, () => loadAll())
+        .on("postgres_changes", { event: "*", schema: "public", table: "regularizations" }, () => loadAll())
+        .on("postgres_changes", { event: "*", schema: "public", table: "disconnect_events" }, () => loadAll())
+        .subscribe();
+      return () => { supabase.removeChannel(ch); };
+    }
+  }, [range, demoMode]);
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+  async function applyLeave(payload: any) {
+    try {
+      const res = await fetch("/api/leave", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      setToast({ open: true, sev: "success", msg: "Leave request submitted" });
+      await loadAll();
+    } catch (e: any) {
+      setToast({ open: true, sev: "error", msg: e?.message || "Failed to submit" });
+    }
+  }
+  async function submitReg(payload: any) {
+    try {
+      const res = await fetch("/api/regularizations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      setToast({ open: true, sev: "success", msg: "Regularization submitted" });
+      await loadAll();
+    } catch (e: any) {
+      setToast({ open: true, sev: "error", msg: e?.message || "Failed to submit" });
+    }
+  }
 
-  const show = (val?: number) => (typeof val === "number" && !Number.isNaN(val) ? val : 0);
+  async function doPunch(type: "in" | "out") {
+    try {
+      setPunchLoading(true);
+      const res = await fetch("/api/attendance/punch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, method: "wifi" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Punch failed");
+      const when = data?.log?.at ? new Date(data.log.at).toLocaleTimeString() : new Date().toLocaleTimeString();
+      setToast({ open: true, sev: "success", msg: `Punched ${type.toUpperCase()} at ${when}` });
+      await loadAll();
+    } catch (e: any) {
+      setToast({ open: true, sev: "error", msg: e?.message || "Punch failed" });
+    } finally {
+      setPunchLoading(false);
+    }
+  }
+
+  const bars = (kpi?.recent || []).map((v, i) => (
+    <Box key={i} sx={{ flex: 1, height: 72, position: "relative" }}>
+      <Box sx={(t) => ({ position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)", width: "70%", height: 10, borderRadius: 999, backgroundColor: t.palette.action.selected, border: `1px solid ${t.palette.divider}` })} />
+      <Box sx={(t) => ({ position: "absolute", bottom: 0, left: 0, right: 0, height: `${v}%`, bgcolor: t.palette.secondary.main, opacity: 0.9, borderTopLeftRadius: 8, borderTopRightRadius: 8 })} />
+      <Box sx={(t) => ({ position: "absolute", inset: 0, borderRadius: 6, border: `1px solid ${t.palette.divider}`, backgroundColor: t.palette.action.hover })} />
+    </Box>
+  ));
 
   return (
     <ThemeProvider theme={theme}>
-      <CssBaseline />
       <Container sx={{ py: 4 }}>
-        {/* Header */}
         <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} spacing={2} sx={{ mb: 3 }}>
           <Box>
-            <Typography variant="h4" fontWeight={800}>Dashboard</Typography>
-            <Typography color="text.secondary">Wi‑Fi attendance • Approvals • Insights</Typography>
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <Typography variant="h4" fontWeight={800}>
+                {employee?.name ? `Welcome, ${employee.name}` : "My Dashboard"}
+              </Typography>
+              {demoMode && (
+                <Chip
+                  label="DEMO"
+                  color="warning"
+                  size="small"
+                  variant="filled"
+                  sx={{ fontWeight: 700 }}
+                />
+              )}
+            </Stack>
+            <Typography color="text.secondary">
+              {employee?.department && employee?.employee_id
+                ? `${employee.department} • ${employee.employee_id} • Attendance • Leave • Regularization`
+                : "Attendance • Leave • Regularization"
+              }
+            </Typography>
           </Box>
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="center">
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={demoMode}
+                  onChange={(e) => setDemoMode(e.target.checked)}
+                  color="warning"
+                />
+              }
+              label="Demo Data"
+              sx={{ margin: 0 }}
+            />
             <ToggleButtonGroup value={range} exclusive onChange={(e, v) => v && setRange(v)} size="small" color="secondary">
-              <ToggleButton value="today">Today</ToggleButton>
-              <ToggleButton value="week">Week</ToggleButton>
-              <ToggleButton value="month">Month</ToggleButton>
+              <ToggleButton value="today"><TodayRoundedIcon sx={{ mr: 0.5 }} />Today</ToggleButton>
+              <ToggleButton value="week"><CalendarMonthRoundedIcon sx={{ mr: 0.5 }} />Week</ToggleButton>
+              <ToggleButton value="month"><AccessTimeRoundedIcon sx={{ mr: 0.5 }} />Month</ToggleButton>
             </ToggleButtonGroup>
-            <IconButton onClick={() => setMode(mode === "light" ? "dark" : "light")}>
-              {mode === "light" ? <Brightness4Icon /> : <Brightness7Icon />}
-            </IconButton>
-            {who && (
-              <Chip
-                icon={<ShieldRoundedIcon />}
-                color={who.role === "hr" ? "secondary" : "default"}
-                label={`${who.role.toUpperCase()}${who.ip ? ` • ${who.ip}` : ""}`}
-              />
-            )}
           </Stack>
         </Stack>
 
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-        {loading && (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-            <CircularProgress />
-          </Box>
-        )}
-
-        {!loading && summary && (
-          <Grid container spacing={2}>
-            {[
-              { label: "Present", value: summary.presentPct, color: "success" as const, icon: <CheckCircleRoundedIcon /> },
-              { label: "Half‑Day", value: summary.halfPct, color: "warning" as const, icon: <TimelineRoundedIcon /> },
-              { label: "Absent", value: summary.absentPct, color: "error" as const, icon: <ReportRoundedIcon /> },
-            ].map((k) => (
-              <Grid item xs={12} md={4} key={k.label}>
-                <Card variant="outlined" sx={{ height: "100%" }}>
-                  <CardContent>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        {k.icon}
-                        <Typography variant="subtitle2" color="text.secondary">{k.label}</Typography>
-                      </Stack>
-                      <Typography variant="h4" fontWeight={800}>{show(k.value)}%</Typography>
-                    </Stack>
-                    <LinearProgress variant="determinate" value={show(k.value)} color={k.color} sx={{ height: 10, borderRadius: 999 }} />
-                  </CardContent>
-                </Card>
-              </Grid>
+        {loading ? (
+          <Grid container spacing={2} sx={{ mb: 1 }}>
+            {[0, 1, 2, 3].map((i) => (
+              <Grid item xs={12} md={3} key={i}><Skeleton variant="rounded" height={96} /></Grid>
             ))}
-
-            {/* Attendance Overview + Status */}
-            <Grid item xs={12} md={7}>
-              <Card variant="outlined" sx={{ height: "100%" }}>
-                <CardContent>
-                  <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                    <Typography variant="h6">Attendance Overview</Typography>
-                    <Chip size="small" icon={<WifiRoundedIcon />} label={range === "today" ? "Today" : range === "week" ? "This Week" : "This Month"} />
-                  </Stack>
-                  {[
-                    { label: "Present", value: summary.presentPct, color: "success" as const },
-                    { label: "Half‑Day", value: summary.halfPct, color: "warning" as const },
-                    { label: "Absent", value: summary.absentPct, color: "error" as const },
-                  ].map((s) => (
-                    <Box key={s.label} sx={{ mb: 1.25 }}>
-                      <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.25 }}>
-                        <Typography variant="body2" color="text.secondary">{s.label}</Typography>
-                        <Typography variant="body2" fontWeight={700}>{show(s.value)}%</Typography>
-                      </Stack>
-                      <LinearProgress variant="determinate" value={show(s.value)} color={s.color} sx={{ height: 10, borderRadius: 999 }} />
-                    </Box>
-                  ))}
-                  <Divider sx={{ my: 2 }} />
-                  <Typography variant="subtitle2" color="text.secondary">Last 7 periods</Typography>
-                  <Stack direction="row" alignItems="flex-end" spacing={1} sx={{ mt: 1 }}>
-                    {summary.recent.map((v, i) => (
-                      <Box key={i} sx={{ flex: 1, height: 80, position: "relative", bgcolor: "action.hover", borderRadius: 1 }}>
-                        <Box sx={{ position: "absolute", bottom: 0, left: 0, right: 0, height: `${show(v)}%`, bgcolor: "secondary.main", opacity: 0.85, borderTopLeftRadius: 8, borderTopRightRadius: 8 }} />
-                      </Box>
-                    ))}
-                  </Stack>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            <Grid item xs={12} md={5}>
-              <Card variant="outlined" sx={{ height: "100%" }}>
-                <CardContent>
-                  <Typography variant="h6" sx={{ mb: 1 }}>Status</Typography>
-                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ flexWrap: "wrap", mb: 2 }}>
-                    <Chip color="success" label={`Wi‑Fi OK`} icon={<CheckCircleRoundedIcon />} />
-                    <Chip color="warning" label={`Disconnects: ${show(summary.todayDisconnects)}`} />
-                    <Chip color="info" label={`Approvals: ${show(summary.pendingApprovals)}`} />
-                  </Stack>
-                  <Divider sx={{ my: 1.5 }} />
-                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>Recent disconnects</Typography>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Employee</TableCell>
-                        <TableCell align="right">Count</TableCell>
-                        <TableCell>Date</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {disconnects.map((d) => (
-                        <TableRow key={d.id} hover>
-                          <TableCell>{d.employee}</TableCell>
-                          <TableCell align="right">{show(d.count)}</TableCell>
-                          <TableCell>{d.date}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Approvals */}
-            <Grid item xs={12}>
-              <Card variant="outlined">
-                <CardContent>
-                  <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ xs: "flex-start", sm: "center" }} justifyContent="space-between" sx={{ mb: 1 }}>
-                    <Typography variant="h6">Approvals</Typography>
-                    <Stack direction="row" spacing={1}>
-                      <Button variant="outlined" startIcon={<TimelineRoundedIcon />} component={Link} href="/regularizations">View Policies</Button>
-                      <Button variant="contained" endIcon={<ArrowForwardRoundedIcon />} component={Link} href="/admin">Open HR Console</Button>
-                    </Stack>
-                  </Stack>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Employee</TableCell>
-                        <TableCell>Type</TableCell>
-                        <TableCell>Date</TableCell>
-                        <TableCell>Status</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {approvals.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={4}>
-                            <Typography variant="body2" color="text.secondary">No pending approvals or insufficient permissions.</Typography>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                      {approvals.map((r) => (
-                        <TableRow key={r.id} hover>
-                          <TableCell>{r.employee}</TableCell>
-                          <TableCell>{r.type}</TableCell>
-                          <TableCell>{r.date}</TableCell>
-                          <TableCell>
-                            <Chip size="small" color={r.status === "approved" ? "success" : r.status === "rejected" ? "error" : "warning"} label={r.status} />
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </Grid>
+          </Grid>
+        ) : (
+          <Grid container spacing={2} sx={{ mb: 2 }}>
+            <Grid item xs={12} md={4}><MiniStat label="Present" value={`${kpi?.presentPct ?? 0}%`} color="success" /></Grid>
+            <Grid item xs={12} md={4}><MiniStat label="Half‑days (this period)" value={`${kpi?.halfDays ?? 0}`} color="warning" /></Grid>
+            <Grid item xs={12} md={4}><MiniStat label="Pending requests" value={`${kpi?.pending ?? 0}`} color="info" /></Grid>
           </Grid>
         )}
+
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={7}>
+            <Card variant="outlined" sx={{ position: "relative", overflow: "hidden" }}>
+              <CardContent>
+                <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} spacing={1}>
+                  <Box>
+                    <Typography variant="overline" sx={{ opacity: 0.8 }}>{range === "today" ? "Today" : range === "week" ? "This Week" : "This Month"}</Typography>
+                    <Typography variant="h6" fontWeight={700}>Attendance Overview</Typography>
+                  </Box>
+                  <Chip icon={<TimelineRoundedIcon />} label={`Last 7 ${kpi?.unit || "days"}`} size="small" color="info" variant="outlined" />
+                </Stack>
+                <Stack direction="row" alignItems="flex-end" spacing={1} sx={{ mt: 2 }}>
+                  {loading ? <Skeleton variant="rounded" width="100%" height={72} /> : bars}
+                </Stack>
+                <Divider sx={{ my: 2 }} />
+                <Grid container spacing={1.2}>
+                  {[{ label: "Present", val: kpi?.presentPct ?? 0, color: "success" }, { label: "Half‑Day", val: kpi?.halfDays ?? 0, color: "warning" }, { label: "Pending", val: kpi?.pending ?? 0, color: "info" }].map((s) => (
+                    <Grid item xs={4} key={s.label}>
+                      <Box sx={(t) => ({ p: 1.2, textAlign: "center", borderRadius: 1.5, bgcolor: alpha((t.palette as any)[s.color].main, t.palette.mode === "light" ? 0.08 : 0.18), color: (t.palette as any)[s.color].main, border: "1px solid", borderColor: alpha((t.palette as any)[s.color].main, 0.25) })}>
+                        <Typography variant="h6" fontWeight={800} lineHeight={1}>{s.val}{s.label === "Present" ? "%" : ""}</Typography>
+                        <Typography variant="caption" sx={{ opacity: 0.9 }}>{s.label}</Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} md={5}>
+            <Card variant="outlined">
+              <CardContent>
+                <Typography variant="subtitle2" color="text.secondary">Presence</Typography>
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}>
+                  <Chip icon={<WifiRoundedIcon />} label={wifiAllowed === null ? "Wi‑Fi —" : wifiAllowed ? "Wi‑Fi verified" : "Wi‑Fi not allowed"} color={wifiAllowed ? "success" : "warning"} variant="filled" />
+                </Stack>
+                <Divider sx={{ my: 2 }} />
+                <Typography variant="subtitle2" color="text.secondary">Quick actions</Typography>
+                <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}>
+                  <Button variant="contained" disabled={punchLoading || !wifiAllowed} onClick={() => doPunch("in")}>Punch In</Button>
+                  <Button variant="outlined" disabled={punchLoading || !wifiAllowed} onClick={() => doPunch("out")}>Punch Out</Button>
+                </Stack>
+                <Divider sx={{ my: 2 }} />
+                <Typography variant="subtitle2" color="text.secondary">Quick history</Typography>
+                <Stack spacing={1} sx={{ mt: 1 }}>
+                  {(loading ? Array.from({ length: 3 }) : events.slice(0, 5)).map((e: any, i: number) => (
+                    <Stack key={i} direction="row" justifyContent="space-between" alignItems="center">
+                      {loading ? <Skeleton width={160} /> : <Typography>{e.date}</Typography>}
+                      {loading ? <Skeleton width={60} /> : <Chip size="small" color={e.kind === "in" ? "success" : "default"} label={e.kind.toUpperCase()} />}
+                    </Stack>
+                  ))}
+                </Stack>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12}>
+            <LeaveForm onSubmit={applyLeave} />
+          </Grid>
+
+          <Grid item xs={12}>
+            <RegularizationForm onSubmit={submitReg} />
+          </Grid>
+
+          <Grid item xs={12}>
+            <Card variant="outlined">
+              <CardContent>
+                <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }}>
+                  <Typography variant="h6" fontWeight={700}>My recent requests</Typography>
+                  <Chip label="Auto half‑day after >2 disconnects/day" size="small" color="warning" variant="outlined" icon={<ErrorRoundedIcon />} />
+                </Stack>
+                <Divider sx={{ my: 2 }} />
+                {loading ? <Skeleton variant="rounded" height={140} /> : (
+                  <Grid container spacing={2}>
+                    {recent.map((r) => (
+                      <Grid item xs={12} sm={6} md={3} key={r.id}>
+                        <Card variant="outlined">
+                          <CardContent>
+                            <Stack direction="row" justifyContent="space-between" alignItems="center">
+                              <Chip size="small" color={r.kind === "leave" ? "info" : "secondary"} label={r.kind} />
+                              <Chip size="small" color={r.status === "approved" ? "success" : r.status === "pending" ? "warning" : "default"} label={r.status} />
+                            </Stack>
+                            <Typography variant="subtitle2" sx={{ mt: 1 }}>{r.label}</Typography>
+                            <Typography variant="caption" color="text.secondary">{r.date_from}{r.date_to ? ` → ${r.date_to}` : ""}</Typography>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                    ))}
+                  </Grid>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+
+        <Snackbar open={toast.open} autoHideDuration={2500} onClose={() => setToast({ ...toast, open: false })}>
+          <Alert severity={toast.sev} onClose={() => setToast({ ...toast, open: false })}>{toast.msg}</Alert>
+        </Snackbar>
       </Container>
     </ThemeProvider>
   );

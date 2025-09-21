@@ -1,15 +1,22 @@
 import { headers } from "next/headers";
 
-export function getClientIp(): string | null {
-  const h = headers();
+function normalizeIp(ip: string): string {
+  if (!ip) return ip;
+  if (ip === "::1") return "127.0.0.1";
+  if (ip.startsWith("::ffff:")) return ip.slice("::ffff:".length);
+  return ip;
+}
+
+export async function getClientIp(): Promise<string | null> {
+  const h = await headers();
   const xff = h.get("x-forwarded-for");
   if (xff) {
     // XFF may contain multiple IPs: client, proxy1, proxy2...
     const first = xff.split(",")[0]?.trim();
-    if (first) return first;
+    if (first) return normalizeIp(first);
   }
   const xrip = h.get("x-real-ip");
-  if (xrip) return xrip;
+  if (xrip) return normalizeIp(xrip);
   return null;
 }
 
@@ -56,4 +63,3 @@ export function isIpAllowed(ip: string | null, allowlist: string[]): boolean {
   }
   return false;
 }
-

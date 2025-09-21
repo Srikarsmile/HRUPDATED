@@ -1,5 +1,5 @@
 import { headers } from "next/headers";
-import { getClientIp } from "@/lib/net";
+import { getClientIp, isIpAllowed, parseOfficeIps } from "@/lib/net";
 
 export type Role = "employee" | "admin" | "hr";
 
@@ -8,7 +8,7 @@ export type Role = "employee" | "admin" | "hr";
 // - Otherwise role = "employee"
 // - userId is derived from IP for demo purposes
 export async function requireAuth() {
-  const ip = getClientIp() || inferIpFromHeaders();
+  const ip = (await getClientIp()) || (await inferIpFromHeaders());
   if (!ip) {
     throw new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
   }
@@ -33,6 +33,16 @@ export async function requireAuth() {
     }
   }
 
+  // Optional global gate: require being on office Wi‑Fi for ANY access
+  // Enable by setting REQUIRE_OFFICE_FOR_ACCESS=true and OFFICE_IPS
+  const requireOffice = String(process.env.REQUIRE_OFFICE_FOR_ACCESS || "false").toLowerCase() === "true";
+  if (requireOffice) {
+    const office = parseOfficeIps();
+    if (office.length > 0 && !isIpAllowed(ip, office)) {
+      throw new Response(JSON.stringify({ error: "Unauthorized (not on office network)" }), { status: 401 });
+    }
+  }
+
   const role: Role = hrSet.has(ip) ? "hr" : "employee";
   const userId = `ip:${ip}`; // use IP as user identifier for demo
   return { userId, role };
@@ -44,9 +54,9 @@ export function requireAdmin(role: Role) {
   }
 }
 
-function inferIpFromHeaders(): string | null {
+async function inferIpFromHeaders(): Promise<string | null> {
   try {
-    const h = headers();
+    const h = await headers();
     const xff = h.get("x-forwarded-for");
     if (xff) return xff.split(",")[0]?.trim() || null;
     const xrip = h.get("x-real-ip");

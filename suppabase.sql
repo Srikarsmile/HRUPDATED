@@ -167,7 +167,59 @@ drop policy if exists "delete_access_logs_service" on access_logs;
 create policy "delete_access_logs_service" on access_logs for delete using (auth.role() = 'service_role');
 
 -- ========================
--- Optional sample data (uncomment to use)
+-- Employee Profiles Table
+-- ========================
+
+create table if not exists employees (
+  user_id text primary key,
+  name text not null,
+  email text,
+  department text,
+  employee_id text unique,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_employees_employee_id on employees(employee_id);
+
+-- RLS policies for employees table
+alter table if exists employees enable row level security;
+
+-- Read policy (anon can read for dashboard display)
+drop policy if exists "read_employees_anon" on employees;
+create policy "read_employees_anon" on employees for select to anon using (true);
+
+-- Write policies (service role only)
+drop policy if exists "write_employees_service" on employees;
+create policy "write_employees_service" on employees for insert with check (auth.role() = 'service_role');
+drop policy if exists "update_employees_service" on employees;
+create policy "update_employees_service" on employees for update using (auth.role() = 'service_role');
+drop policy if exists "delete_employees_service" on employees;
+create policy "delete_employees_service" on employees for delete using (auth.role() = 'service_role');
+
+-- Add to realtime
+do $$ begin
+  alter publication supabase_realtime add table employees;
+exception when duplicate_object then null; end $$;
+
+-- ========================
+-- Sample Employee Data
+-- ========================
+
+insert into employees (user_id, name, email, department, employee_id) values
+  ('ip:127.0.0.1', 'Alice Johnson', 'alice.johnson@company.com', 'Engineering', 'EMP001'),
+  ('ip:::1', 'Alice Johnson', 'alice.johnson@company.com', 'Engineering', 'EMP001'),
+  ('ip:192.168.29.100', 'Bob Smith', 'bob.smith@company.com', 'Marketing', 'EMP002'),
+  ('ip:192.168.29.101', 'Carol Davis', 'carol.davis@company.com', 'HR', 'EMP003'),
+  ('ip:192.168.29.102', 'David Wilson', 'david.wilson@company.com', 'Finance', 'EMP004'),
+  ('ip:192.168.29.103', 'Emma Brown', 'emma.brown@company.com', 'Design', 'EMP005')
+on conflict (user_id) do update set
+  name = excluded.name,
+  email = excluded.email,
+  department = excluded.department,
+  employee_id = excluded.employee_id;
+
+-- ========================
+-- Optional attendance sample data (uncomment to use)
 -- ========================
 -- insert into attendance_days (user_id, day, half_day) values
 --   ('ip:127.0.0.1', current_date, false)

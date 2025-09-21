@@ -20,7 +20,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Punch in/out must be via office Wi‑Fi" }, { status: 403 });
     }
 
-    const ip = getClientIp();
+    const ip = await getClientIp();
     const allowed = isIpAllowed(ip, parseOfficeIps());
     if (!allowed) {
       return NextResponse.json({ error: "Not on office network", ip }, { status: 403 });

@@ -8,7 +8,7 @@ A modern HR management system built with Next.js, featuring attendance tracking,
 - 📊 **Dashboard Analytics** - KPI stats and attendance summaries
 - 🏖️ **Leave Management** - Submit and track leave requests
 - ⚙️ **Admin Panel** - Approve/reject requests and manage users
-- 🔐 **Role-based Access** - Employee, HR, and Admin roles
+- 🔐 **Role-based Access** - Employee vs HR/Admin (IP-based)
 
 ## Quick Start
 
@@ -22,7 +22,11 @@ A modern HR management system built with Next.js, featuring attendance tracking,
    ```
    NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-   OFFICE_IPS=your_office_ip_addresses
+   SUPABASE_SERVICE_ROLE_KEY=service_role_key
+   OFFICE_IPS=your_office_ip_addresses  # Comma-separated IPs or CIDR ranges
+   REQUIRE_OFFICE_FOR_ACCESS=false       # If true, only office IPs can access the app
+   HR_IPS=hr_ip1,hr_ip2                  # IPs treated as HR/Admin
+   EMPLOYEE_IPS=optional_allowed_ips     # Optional allowlist (restricts access)
    ```
 
 3. **Run development server**
@@ -92,13 +96,14 @@ create table regularizations (
 - `/dashboard` - Employee dashboard
 - `/attendance` - Punch in/out
 - `/leave` - Leave management
-- `/admin` - Admin controls (HR/Admin only)
+- `/admin/rt` - HR/Admin console (real‑time)
+- `/admin/attendance` - Attendance days management (toggle half‑days)
 
 ## Tech Stack
 
 - **Framework**: Next.js 14
 - **Database**: Supabase
-- **Authentication**: Clerk
+- **Authentication**: IP-based (from request headers)
 - **Styling**: Tailwind CSS
 - **UI Components**: Custom components
 

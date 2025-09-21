@@ -6,7 +6,7 @@ import { requireAuth } from "@/lib/auth";
 export async function POST(req: Request) {
   try {
     const { userId } = await requireAuth();
-    const ip = getClientIp();
+    const ip = await getClientIp();
     const body = await req.json().catch(() => ({} as any));
     const path = body?.path || "/dashboard";
     const { error } = await supabase
